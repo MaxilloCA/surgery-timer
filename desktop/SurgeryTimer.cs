@@ -151,13 +151,15 @@ namespace SurgeryTimer {
   void Export() {using(var dialog=new SaveFileDialog {Filter="CSV files (*.csv)|*.csv",FileName="OR-Timer-"+DateTime.Now.ToString("yyyy-MM-dd")+".csv"})if(dialog.ShowDialog(this)==DialogResult.OK)try{File.WriteAllText(dialog.FileName,Store.Csv(state),new UTF8Encoding(true));}catch(Exception e){MessageBox.Show(this,e.Message,"Export failed");}}
   void Smoke() {
    try {
+    NameDialog.VerifyPicker();
+    using(var picker=new NameDialog()) {picker.Show(this);Application.DoEvents();using(var bmp=new Bitmap(picker.Width,picker.Height)){picker.DrawToBitmap(bmp,new Rectangle(0,0,picker.Width,picker.Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-picker.png"));}picker.Close();}
     Tests.Check(Width==125 && Height==75 && ClientSize==new Size(125,75),"125 x 75 window");Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==3,"all global shortcuts registered");
     SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery","start message");
     using(var bmp=new Bitmap(125,75)){DrawToBitmap(bmp,new Rectangle(0,0,125,75));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery.png"));}
     SendMessage(Handle,0x0312,new IntPtr(2),IntPtr.Zero);Tests.Check(state.Phase=="turnover","end message");
     using(var bmp=new Bitmap(125,75)){DrawToBitmap(bmp,new Rectangle(0,0,125,75));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-turnover.png"));}
     SendMessage(Handle,0x0312,new IntPtr(3),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[0].End.HasValue,"end day message");
-    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: dimensions, window flags, three global registrations, WM_HOTKEY transitions, screenshots.");
+    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: dimensions, window flags, three global registrations, WM_HOTKEY transitions, fixed 16-name picker requiring selection, screenshots.");
    }catch(Exception e){Environment.ExitCode=1;File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"FAIL: "+e);}
    finally{Close();}
   }

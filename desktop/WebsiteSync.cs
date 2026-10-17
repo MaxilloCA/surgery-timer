@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -10,13 +10,35 @@ using System.Windows.Forms;
 
 namespace SurgeryTimer {
  public sealed class NameDialog : Form {
-  readonly TextBox field=new TextBox(); public string AnesthetistName {get{return field.Text.Trim();}}
+  readonly ComboBox field=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList};
+  readonly Button start=new Button {Text="Start surgery",Location=new Point(120,78),Size=new Size(100,28),Enabled=false};
+  public string AnesthetistName {get{return field.SelectedItem as string ?? String.Empty;}}
   public NameDialog() {
    Text="Start a new surgery day";ClientSize=new Size(330,124);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterScreen;ShowInTaskbar=false;TopMost=true;
-   Controls.Add(new Label {Text="Anesthetist name (shown in website history)",AutoSize=true,Location=new Point(12,12)});
-   field.Location=new Point(12,36);field.Width=305;field.MaxLength=120;Controls.Add(field);
-   var start=new Button {Text="Start surgery",Location=new Point(120,78),Size=new Size(100,28)};start.Click+=delegate{if(AnesthetistName.Length==0){field.Focus();return;}DialogResult=DialogResult.OK;Close();};Controls.Add(start);
+   Controls.Add(new Label {Text="Select anesthesiologist",AutoSize=true,Location=new Point(12,12)});
+   using(var stream=typeof(NameDialog).Assembly.GetManifestResourceStream("anesthesiologists.json")) {
+    if(stream==null)throw new InvalidDataException("The anesthesiologist list is missing. Rebuild OR Timer.");
+    using(var reader=new StreamReader(stream))field.Items.AddRange(new JavaScriptSerializer().Deserialize<string[]>(reader.ReadToEnd()));
+   }
+   field.Location=new Point(12,36);field.Width=305;field.SelectedIndex=-1;field.SelectedIndexChanged+=delegate{start.Enabled=field.SelectedIndex>=0;};Controls.Add(field);
+   start.Click+=delegate{if(field.SelectedIndex<0){field.Focus();return;}DialogResult=DialogResult.OK;Close();};Controls.Add(start);
    var cancel=new Button {Text="Cancel",Location=new Point(230,78),Size=new Size(87,28),DialogResult=DialogResult.Cancel};Controls.Add(cancel);AcceptButton=start;CancelButton=cancel;
+  }
+  public static void VerifyPicker() {
+   using(var dialog=new NameDialog()) {
+    Tests.Check(dialog.field.DropDownStyle==ComboBoxStyle.DropDownList,"picker rejects typed names");
+    Tests.Check(dialog.field.Items.Count==16 && dialog.field.SelectedIndex==-1 && dialog.AnesthetistName==String.Empty && !dialog.start.Enabled,"picker requires explicit selection");
+    string previous=null;
+    for(int i=0;i<dialog.field.Items.Count;i++) {
+     string name=(string)dialog.field.Items[i];
+     Tests.Check(name.StartsWith(i<2?".surgi - Dr. ":"rvh - Dr. "),"picker group order");
+     if(previous!=null && i!=2)Tests.Check(String.CompareOrdinal(previous,name)<0,"picker alphabetical order");
+     previous=name;
+    }
+    dialog.field.SelectedIndex=0;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName==".surgi - Dr. Chan","first selection value");
+    dialog.field.SelectedIndex=15;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName=="rvh - Dr. Zoratto","last selection value");
+    dialog.field.SelectedIndex=-1;Tests.Check(!dialog.start.Enabled && dialog.AnesthetistName==String.Empty,"cleared selection cannot start");
+   }
   }
  }
  public interface ISyncTransport {string Post(string path,string json);}

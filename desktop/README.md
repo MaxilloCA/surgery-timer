@@ -1,4 +1,4 @@
-﻿# OR Timer for Windows
+# OR Timer for Windows
 
 A small Windows desktop companion for the surgery timer website.
 
@@ -14,7 +14,7 @@ Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (include
 
 Use the number row above the letters. The shortcuts work when another ordinary desktop app has focus. If another application owns one, OR Timer warns you; its tray action still works. Holding a shortcut does not repeat it. Repeated Start during surgery and End during turnover are harmless.
 
-Starting a new day asks for the anesthetist name, matching the website history. Timing starts after you confirm. The surgery and turnover durations are both shown as hours:minutes:seconds. Green indicates active surgery; amber indicates active turnover. End day retains history and resets the display. Starting again creates a fresh session. An unfinished session is not silently reset at midnight.
+Starting a new day asks you to select an anesthesiologist from the same fixed list used by the iPhone website. The .surgi names appear first, then rvh names, alphabetically within each group. No name is selected automatically, and Start surgery stays disabled until you select one. Timing starts after you confirm. Existing saved history retains its original names. The surgery and turnover durations are both shown as hours:minutes:seconds. Green indicates active surgery; amber indicates active turnover. End day retains history and resets the display. Starting again creates a fresh session. An unfinished session is not silently reset at midnight.
 
 The timer is always above ordinary desktop windows and does not appear in the taskbar. Windows secure screens and some exclusive fullscreen programs can cover it. It is deliberately 125 x 75 physical pixels, even when Windows display scaling is enabled, so text is small on high-resolution displays. This version does not automatically start at Windows sign-in.
 
@@ -30,6 +30,6 @@ Use **Export history (CSV)** to export retained cases, durations and UTC timesta
 
 Run `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The build uses the installed .NET Framework compiler and Windows libraries; no package installation is required.
 
-Run `ORTimer.exe --self-test` for deterministic state, restart, CSV, recovery and simulated website synchronization checks (no production writes). Run `ORTimer.exe --smoke-test` for a temporary UI test that registers the real shortcuts, sends shortcut messages, checks size/topmost flags, captures two PNGs and exits. Do not run the smoke test while another copy owns these shortcuts. Result text and screenshots are written beside the executable. Test data is isolated in a temporary folder and removed on exit.
+Run `ORTimer.exe --self-test` for deterministic state, restart, CSV, recovery and simulated website synchronization checks (no production writes). Run `ORTimer.exe --smoke-test` for a temporary UI test that registers the real shortcuts, sends shortcut messages, checks size/topmost flags, checks the 16-name selection-only picker, captures three PNGs and exits. Do not run the smoke test while another copy owns these shortcuts. Result text and screenshots are written beside the executable. Test data is isolated in a temporary folder and removed on exit.
 
 The executable is unsigned. Native UI and hotkey tests passed in the build environment; the final target PC should still be checked for shortcut conflicts and its display arrangement.
