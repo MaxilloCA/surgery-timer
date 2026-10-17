@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+/.npm-cache/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -32,3 +33,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Desktop build and verification output
+/desktop/*.exe
+/desktop/*-result.txt
+/desktop/smoke-*.png

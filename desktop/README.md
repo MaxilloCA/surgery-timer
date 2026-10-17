@@ -1,0 +1,35 @@
+﻿# OR Timer for Windows
+
+A small Windows desktop companion for the surgery timer website.
+
+## Run
+
+Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (included with modern Windows). It opens a 125 x 75 pixel timer and a system tray icon. Windows may place the icon in the tray overflow. Drag the timer to move it; it stays within a screen's working area. Right-click either the timer or the tray icon for controls.
+
+| Action | Global keyboard shortcut |
+| --- | --- |
+| Start surgery / finish previous turnover | Ctrl+Shift+Alt+1 |
+| End surgery / start turnover | Ctrl+Shift+Alt+2 |
+| End day / finalize active phase | Ctrl+Shift+Alt+3 |
+
+Use the number row above the letters. The shortcuts work when another ordinary desktop app has focus. If another application owns one, OR Timer warns you; its tray action still works. Holding a shortcut does not repeat it. Repeated Start during surgery and End during turnover are harmless.
+
+Starting a new day asks for the anesthetist name, matching the website history. Timing starts after you confirm. The surgery and turnover durations are both shown as hours:minutes:seconds. Green indicates active surgery; amber indicates active turnover. End day retains history and resets the display. Starting again creates a fresh session. An unfinished session is not silently reset at midnight.
+
+The timer is always above ordinary desktop windows and does not appear in the taskbar. Windows secure screens and some exclusive fullscreen programs can cover it. It is deliberately 125 x 75 physical pixels, even when Windows display scaling is enabled, so text is small on high-resolution displays. This version does not automatically start at Windows sign-in.
+
+## Data and restart
+
+Local recovery state is stored at `%LOCALAPPDATA%\OR Timer\timer-state.json`. Each transition is saved before the display changes. A previous version is retained as `.bak`. If the main file is damaged, the previous state is recovered and the damaged file is preserved with a unique `.corrupt-` suffix. If both files are damaged, startup stops without overwriting them. A recovered backup can lack the latest transition; review it when warned.
+
+Quit leaves the active timer intact. Reopening calculates elapsed time from the saved timestamp, including time while the app was closed or the computer slept. Durations use the Windows clock; substantial clock corrections can affect elapsed times. End the day before quitting if timing should stop.
+
+Use **Export history (CSV)** to export retained cases, durations and UTC timestamps. Active phases have blank final durations until completed. Local data contains case/session IDs and the anesthetist name, not patient names. Saved records upload to https://surgery-timer.vercel.app in the background. If offline, timing continues locally and retries every 30 seconds and on the next launch. The tray menu shows sync status and provides retry, error details and website history. Stable IDs and saved acknowledgments make retries safe and avoid uploading unchanged history. The website must have the companion idempotent API update deployed before this sharing works. Existing website history is not downloaded into the desktop timer; its history link opens the shared website records.
+
+## Build and verification
+
+Run `powershell -ExecutionPolicy Bypass -File .\build.ps1`. The build uses the installed .NET Framework compiler and Windows libraries; no package installation is required.
+
+Run `ORTimer.exe --self-test` for deterministic state, restart, CSV, recovery and simulated website synchronization checks (no production writes). Run `ORTimer.exe --smoke-test` for a temporary UI test that registers the real shortcuts, sends shortcut messages, checks size/topmost flags, captures two PNGs and exits. Do not run the smoke test while another copy owns these shortcuts. Result text and screenshots are written beside the executable. Test data is isolated in a temporary folder and removed on exit.
+
+The executable is unsigned. Native UI and hotkey tests passed in the build environment; the final target PC should still be checked for shortcut conflicts and its display arrangement.
