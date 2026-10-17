@@ -3,15 +3,12 @@
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, Download, Calendar, User, Loader2 } from "lucide-react";
 import { formatDurationMinutes, formatDisplayDate } from "@/lib/utils";
+import EditCaseTimes, { CaseTimes } from "@/components/EditCaseTimes";
 
-interface CaseRecord {
-  id: string;
-  caseNumber: number;
-  surgeryStart: string;
-  surgeryEnd: string | null;
-  surgeryDurationSec: number | null;
-  turnoverDurationSec: number | null;
-  notes: string | null;
+type CaseRecord = CaseTimes;
+
+function displayTime(value: string | null) {
+  return value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 }
 
 interface SessionRecord {
@@ -28,6 +25,19 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [loadingCases, setLoadingCases] = useState<string | null>(null);
   const [filterName, setFilterName] = useState("");
+  const [editing, setEditing] = useState<{ sessionId: string; record: CaseRecord } | null>(null);
+  const [saveMessage, setSaveMessage] = useState("");
+
+  async function reloadCases(sessionId: string) {
+    try {
+      const response = await fetch(`/api/cases?sessionId=${sessionId}`);
+      if (!response.ok) throw new Error("Unable to reload case times.");
+      const records = await response.json();
+      setCasesBySession((previous) => ({ ...previous, [sessionId]: records }));
+    } catch {
+      setSaveMessage("Unable to reload the latest times. Refresh this page before editing again.");
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -87,6 +97,8 @@ export default function HistoryPage() {
           Export All
         </button>
       </div>
+
+      {saveMessage && <p role="status" className="mb-4 text-sm text-accent-teal">{saveMessage}</p>}
 
       {/* Filter */}
       <div className="mb-5">
@@ -201,6 +213,15 @@ export default function HistoryPage() {
                             <span className="text-text-secondary truncate">
                               {c.notes ?? "—"}
                             </span>
+                            <div className="col-span-4 mt-1 text-xs text-text-secondary space-y-1">
+                              <p>Surgery in: {displayTime(c.surgeryStart)}</p>
+                              <p>Surgery out: {displayTime(c.surgeryEnd)}</p>
+                              <p>Turnover in: {displayTime(c.turnoverStart)}</p>
+                              <p>Turnover out: {displayTime(c.turnoverEnd)}</p>
+                              <button type="button" aria-label={`Edit times for case ${c.caseNumber}`}
+                                onClick={() => { setSaveMessage(""); setEditing({ sessionId: session.id, record: c }); }}
+                                className="mt-2 min-h-10 rounded-lg border border-accent-teal/30 px-3 py-2 text-accent-teal hover:bg-accent-teal/10">Edit times</button>
+                            </div>
                           </div>
                         ))}
                         {/* Download CSV */}
@@ -226,6 +247,14 @@ export default function HistoryPage() {
           })}
         </div>
       )}
+      {editing && <EditCaseTimes key={editing.record.id} record={editing.record}
+        onClose={() => setEditing(null)}
+        onConflict={() => { void reloadCases(editing.sessionId); }}
+        onSaved={(updated) => {
+          setCasesBySession((previous) => ({ ...previous, [editing.sessionId]: previous[editing.sessionId].map((record) => record.id === updated.id ? updated : record) }));
+          setSaveMessage(`Case #${updated.caseNumber} times saved. Shared history and statistics are updated.`);
+          setEditing(null);
+        }} />}
     </div>
   );
 }
