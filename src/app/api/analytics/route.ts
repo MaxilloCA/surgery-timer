@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { sessions, cases } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { and, isNull, eq, asc } from "drizzle-orm";
+
+import { visibleCase } from "@/lib/history-deletion";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const allSessions = await getDb().select().from(sessions).orderBy(asc(sessions.date));
+    const allSessions = await getDb().select().from(sessions).where(isNull(sessions.deletedAt)).orderBy(asc(sessions.date));
 
     const dailyStats: Array<{
       date: string;
@@ -27,7 +29,7 @@ export async function GET() {
       const sessionCases = await getDb()
         .select()
         .from(cases)
-        .where(eq(cases.sessionId, s.id))
+        .where(and(eq(cases.sessionId, s.id), visibleCase()))
         .orderBy(asc(cases.caseNumber));
 
       const surgeryDurations = sessionCases

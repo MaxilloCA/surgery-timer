@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { durationSeconds, timerMerge, validateCorrection } from "./case-times";
+import { changedTimeLocks, durationSeconds, timerMerge, validateCorrection, validateTimes } from "./case-times";
 
 const times = { surgeryStart: "2026-10-17T12:00:00Z", surgeryEnd: "2026-10-17T12:05:00Z", turnoverStart: "2026-10-17T12:05:00Z", turnoverEnd: "2026-10-17T12:07:00Z" };
 const correction = { id: "3b90b4a0-1db4-4da0-9321-bc759bf471ff", original: times, ...times };
@@ -15,31 +15,40 @@ test("corrections derive elapsed seconds including midnight and zoned timestamps
   assert.equal(durationSeconds(midnight).surgeryDurationSec, 120);
 });
 
-test("corrections reject bad timestamps, invalid ordering, missing originals, and partial turnover", () => {
+test("corrections reject bad timestamps, invalid ordering, missing originals, and missing fields", () => {
   for (const change of [
-    { id: "invalid" }, { original: undefined }, { surgeryStart: null }, { surgeryEnd: null },
+    { id: "invalid" }, { original: undefined }, { surgeryStart: undefined }, { surgeryEnd: undefined },
     { surgeryStart: "2026-10-17T12:00:00" }, { surgeryEnd: "bad" },
     { surgeryEnd: "2026-10-17T11:00:00Z" }, { turnoverStart: "2026-10-17T12:04:00Z" },
-    { turnoverEnd: "2026-10-17T12:04:00Z" }, { turnoverEnd: null },
+    { turnoverEnd: "2026-10-17T12:04:00Z" },
     { surgeryStart: "1900-01-01T00:00:00Z" },
   ]) assert.notEqual(validateCorrection({ ...correction, ...change }), null);
 });
 
-test("only cases with no turnover may keep both turnover endpoints null", () => {
-  const empty = { ...times, turnoverStart: null, turnoverEnd: null };
-  assert.equal(validateCorrection({ ...correction, original: empty, ...empty }), null);
-  assert.notEqual(validateCorrection({ ...correction, ...empty }), null);
-  assert.notEqual(validateCorrection({ ...correction, original: { ...times, turnoverEnd: null }, ...empty }), null);
+test("any endpoint may be removed or entered independently", () => {
+  for (const field of ["surgeryStart", "surgeryEnd", "turnoverStart", "turnoverEnd"]) {
+    const partial = { ...times, [field]: null };
+    assert.equal(validateCorrection({ ...correction, ...partial }), null);
+  }
+  const partial = { surgeryStart: null, surgeryEnd: times.surgeryEnd, turnoverStart: null, turnoverEnd: null };
+  assert.equal(validateTimes(partial), null);
+  assert.deepEqual(durationSeconds(partial), { surgeryDurationSec: null, turnoverDurationSec: null });
+  assert.equal(validateTimes({ ...partial, turnoverEnd: "2026-10-17T11:00:00Z" }), "Times must be in surgery/turnover order");
 });
 
-test("timer merge SQL preserves corrected endpoints and computes duration using retained timestamps", () => {
-  const merge = timerMerge({ surgeryEnd: sql`excluded.surgery_end`, turnoverStart: sql`excluded.turnover_start`, turnoverEnd: sql`excluded.turnover_end` });
-  const render = (value: ReturnType<typeof sql>) => new PgDialect().sqlToQuery(value).sql;
-  assert.equal(render(merge.set.surgeryEnd), 'coalesce("cases"."surgery_end", excluded.surgery_end)');
-  assert.equal(render(merge.set.turnoverStart), 'coalesce("cases"."turnover_start", excluded.turnover_start)');
-  assert.equal(render(merge.set.turnoverEnd), 'coalesce("cases"."turnover_end", excluded.turnover_end)');
+test("timer merges honor timestamp locks and preserve browser placeholder start behavior", () => {
+  const incoming = { surgeryEnd: sql`excluded.surgery_end`, turnoverStart: sql`excluded.turnover_start`, turnoverEnd: sql`excluded.turnover_end` };
+  const merge = timerMerge(incoming);
+  const render = (value: ReturnType<typeof sql>) => new PgDialect().sqlToQuery(value);
+  assert.match(render(merge.set.surgeryEnd).sql, /any\("cases"\."locked_times"\)/);
+  assert.deepEqual(render(merge.set.surgeryEnd).params, ["surgeryEnd"]);
   assert.equal("surgeryStart" in merge.set, false);
-  assert.equal(render(merge.set.turnoverDurationSec), 'floor(extract(epoch from (coalesce("cases"."turnover_end", excluded.turnover_end) - coalesce("cases"."turnover_start", excluded.turnover_start))))::integer');
-  assert.match(render(merge.valid), /coalesce\("cases"\."turnover_end", excluded.turnover_end\) >= coalesce\("cases"\."turnover_start", excluded.turnover_start\)/);
-  assert.doesNotMatch(render(merge.valid), /excluded\.surgery_start|excluded\.surgery_duration|excluded\.turnover_duration/);
+  const desktopMerge = timerMerge({ ...incoming, surgeryStart: sql`excluded.surgery_start` });
+  assert.equal("surgeryStart" in desktopMerge.set, true);
+  assert.match(render(desktopMerge.set.surgeryStart!).sql, /any\("cases"\."locked_times"\)/);
+  const cleared = { ...times, surgeryStart: null };
+  const locks = render(changedTimeLocks(times, cleared));
+  assert.deepEqual(locks.params, ["surgeryStart"]);
+  assert.match(locks.sql, /\|\| ARRAY\[/);
+  assert.deepEqual(render(changedTimeLocks(times, times)).params, []);
 });

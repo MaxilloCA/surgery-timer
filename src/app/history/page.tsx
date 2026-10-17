@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, Download, Calendar, User, Loader2 } from "lucide-react";
 import { formatDurationMinutes, formatDisplayDate } from "@/lib/utils";
-import EditCaseTimes, { CaseTimes } from "@/components/EditCaseTimes";
+import EditCaseTimes, { CaseTimes, timeFields, TimeField } from "@/components/EditCaseTimes";
+import DeleteHistoryDialog from "@/components/DeleteHistoryDialog";
 
 type CaseRecord = CaseTimes;
 
@@ -25,8 +26,11 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [loadingCases, setLoadingCases] = useState<string | null>(null);
   const [filterName, setFilterName] = useState("");
-  const [editing, setEditing] = useState<{ sessionId: string; record: CaseRecord } | null>(null);
+  const [editing, setEditing] = useState<{ sessionId: string; record: CaseRecord; creating?: boolean; contextLabel?: string } | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
+  const [deleting, setDeleting] = useState<
+    { kind: "day"; date: string } | { kind: "case" | "time"; sessionId: string; date: string; record: CaseRecord; field?: TimeField } | null
+  >(null);
 
   async function reloadCases(sessionId: string) {
     try {
@@ -214,13 +218,22 @@ export default function HistoryPage() {
                               {c.notes ?? "—"}
                             </span>
                             <div className="col-span-4 mt-1 text-xs text-text-secondary space-y-1">
-                              <p>Surgery in: {displayTime(c.surgeryStart)}</p>
-                              <p>Surgery out: {displayTime(c.surgeryEnd)}</p>
-                              <p>Turnover in: {displayTime(c.turnoverStart)}</p>
-                              <p>Turnover out: {displayTime(c.turnoverEnd)}</p>
+                              {timeFields.map(([field, label]) => (
+                                <div key={field} className="flex items-center justify-between gap-2">
+                                  <p>{label}: {displayTime(c[field])}</p>
+                                  {c[field] && <button type="button" aria-label={`Delete ${label.toLowerCase()} time for case ${c.caseNumber}`}
+                                    onClick={() => { setSaveMessage(""); setDeleting({ kind: "time", sessionId: session.id, date: session.date, record: c, field }); }}
+                                    className="min-h-11 shrink-0 rounded-lg px-2 text-red-400 hover:bg-red-400/10">Delete</button>}
+                                </div>
+                              ))}
+                              <div className="flex flex-wrap gap-2">
                               <button type="button" aria-label={`Edit times for case ${c.caseNumber}`}
                                 onClick={() => { setSaveMessage(""); setEditing({ sessionId: session.id, record: c }); }}
                                 className="mt-2 min-h-10 rounded-lg border border-accent-teal/30 px-3 py-2 text-accent-teal hover:bg-accent-teal/10">Edit times</button>
+                              <button type="button" aria-label={`Delete case ${c.caseNumber}`}
+                                onClick={() => { setSaveMessage(""); setDeleting({ kind: "case", sessionId: session.id, date: session.date, record: c }); }}
+                                className="mt-2 min-h-10 rounded-lg border border-red-400/30 px-3 py-2 text-red-400 hover:bg-red-400/10">Delete case</button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -240,6 +253,19 @@ export default function HistoryPage() {
                         </div>
                       </>
                     )}
+                    <div className="border-t border-border/50 px-4 py-3">
+                      <button type="button" disabled={loadingCases === session.id}
+                        onClick={() => {
+                          setSaveMessage("");
+                          setEditing({ sessionId: session.id, creating: true, contextLabel: `${formatDisplayDate(session.date)} · ${session.anesthetistName}`,
+                            record: { id: crypto.randomUUID(), caseNumber: 0, surgeryStart: null, surgeryEnd: null, turnoverStart: null, turnoverEnd: null, surgeryDurationSec: null, turnoverDurationSec: null, notes: null } });
+                        }}
+                        className="mb-3 mr-2 min-h-11 rounded-lg border border-accent-teal/30 px-3 py-2 text-sm text-accent-teal hover:bg-accent-teal/10 disabled:opacity-50">Add missed case</button>
+                      <button type="button" aria-label={`Delete all history for ${formatDisplayDate(session.date)}`}
+                        onClick={() => { setSaveMessage(""); setDeleting({ kind: "day", date: session.date }); }}
+                        className="min-h-11 rounded-lg border border-red-400/30 px-3 py-2 text-sm text-red-400 hover:bg-red-400/10">Delete day</button>
+                      <p className="mt-2 text-xs text-text-muted">Deletes this date for all anesthesiologists, including any hidden by your filter.</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -247,12 +273,40 @@ export default function HistoryPage() {
           })}
         </div>
       )}
+      {deleting && <DeleteHistoryDialog
+        title={deleting.kind === "day" ? `Delete ${formatDisplayDate(deleting.date)}?` : deleting.kind === "time" ? `Delete ${timeFields.find(([key]) => key === deleting.field)?.[1].toLowerCase()} time?` : `Delete case #${deleting.record.caseNumber}?`}
+        description={deleting.kind === "day"
+          ? `All sessions, cases, surgery and turnover times, and notes for ${formatDisplayDate(deleting.date)} will be deleted for every anesthesiologist, including sessions hidden by your filter.`
+          : deleting.kind === "time" && deleting.field
+            ? `${timeFields.find(([key]) => key === deleting.field)?.[1]}: ${displayTime(deleting.record[deleting.field])}, case #${deleting.record.caseNumber} for ${formatDisplayDate(deleting.date)}. Only this timestamp will be removed. Its duration will be unavailable until both start and stop times are entered.`
+            : `Case #${deleting.record.caseNumber} for ${formatDisplayDate(deleting.date)}, including its surgery in/out, turnover in/out, and notes, will be deleted.`}
+        endpoint={deleting.kind === "day" ? "/api/sessions" : "/api/cases"}
+        payload={deleting.kind === "day" ? { date: deleting.date } : deleting.kind === "time" ? { id: deleting.record.id, field: deleting.field, original: Object.fromEntries(timeFields.map(([key]) => [key, deleting.record[key]])) } : { id: deleting.record.id }}
+        onClose={() => setDeleting(null)}
+        onConflict={() => { if (deleting.kind !== "day") void reloadCases(deleting.sessionId); }}
+        onDeleted={(updated) => {
+          if (deleting.kind === "day") {
+            const deletedSessionIds = new Set(sessions.filter((session) => session.date === deleting.date).map((session) => session.id));
+            setSessions((previous) => previous.filter((session) => session.date !== deleting.date));
+            setCasesBySession((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => !deletedSessionIds.has(id))));
+            if (expanded && deletedSessionIds.has(expanded)) setExpanded(null);
+            setSaveMessage(`All history for ${formatDisplayDate(deleting.date)} deleted. Shared statistics are updated.`);
+          } else if (deleting.kind === "time" && updated) {
+            setCasesBySession((previous) => ({ ...previous, [deleting.sessionId]: (previous[deleting.sessionId] ?? []).map((record) => record.id === updated.id ? updated : record) }));
+            setSaveMessage(`Case #${updated.caseNumber} time deleted. Shared statistics are updated.`);
+          } else {
+            setCasesBySession((previous) => ({ ...previous, [deleting.sessionId]: (previous[deleting.sessionId] ?? []).filter((record) => record.id !== deleting.record.id) }));
+            setSaveMessage(`Case #${deleting.record.caseNumber} deleted. Shared statistics are updated.`);
+          }
+          setDeleting(null);
+        }} />}
       {editing && <EditCaseTimes key={editing.record.id} record={editing.record}
+        sessionId={editing.creating ? editing.sessionId : undefined} contextLabel={editing.contextLabel}
         onClose={() => setEditing(null)}
         onConflict={() => { void reloadCases(editing.sessionId); }}
         onSaved={(updated) => {
-          setCasesBySession((previous) => ({ ...previous, [editing.sessionId]: previous[editing.sessionId].map((record) => record.id === updated.id ? updated : record) }));
-          setSaveMessage(`Case #${updated.caseNumber} times saved. Shared history and statistics are updated.`);
+          setCasesBySession((previous) => ({ ...previous, [editing.sessionId]: [...(previous[editing.sessionId] ?? []).filter((record) => record.id !== updated.id), updated].sort((a, b) => a.caseNumber - b.caseNumber) }));
+          setSaveMessage(`Case #${updated.caseNumber} ${editing.creating ? "added" : "times saved"}. Shared history and statistics are updated.`);
           setEditing(null);
         }} />}
     </div>

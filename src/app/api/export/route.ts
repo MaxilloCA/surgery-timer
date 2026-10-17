@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { sessions, cases } from "@/lib/db/schema";
-import { eq, asc, desc } from "drizzle-orm";
+import { and, isNull, eq, asc, desc } from "drizzle-orm";
+
+import { visibleCase } from "@/lib/history-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     if (sessionId) {
       const session = await getDb().query.sessions.findFirst({
-        where: eq(sessions.id, sessionId),
+        where: and(eq(sessions.id, sessionId), isNull(sessions.deletedAt)),
       });
       if (!session) {
         return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -31,7 +33,7 @@ export async function GET(req: NextRequest) {
       const sessionCases = await getDb()
         .select()
         .from(cases)
-        .where(eq(cases.sessionId, sessionId))
+        .where(and(eq(cases.sessionId, sessionId), visibleCase()))
         .orderBy(asc(cases.caseNumber));
 
       rows = sessionCases.map((c) => ({
@@ -46,13 +48,13 @@ export async function GET(req: NextRequest) {
       }));
     } else {
       // All sessions
-      const allSessions = await getDb().select().from(sessions).orderBy(desc(sessions.date));
+      const allSessions = await getDb().select().from(sessions).where(isNull(sessions.deletedAt)).orderBy(desc(sessions.date));
       rows = [];
       for (const s of allSessions) {
         const sessionCases = await getDb()
           .select()
           .from(cases)
-          .where(eq(cases.sessionId, s.id))
+          .where(and(eq(cases.sessionId, s.id), visibleCase()))
           .orderBy(asc(cases.caseNumber));
         for (const c of sessionCases) {
           rows.push({
