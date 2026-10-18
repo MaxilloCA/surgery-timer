@@ -102,10 +102,10 @@ namespace SurgeryTimer {
    }
   }
   readonly List<int> registered=new List<int>(); readonly ContextMenuStrip menu=new ContextMenuStrip();
-  readonly bool smoke; readonly BackgroundWorker syncWorker=new BackgroundWorker(); readonly ToolStripMenuItem syncStatus=new ToolStripMenuItem("Sync: waiting"); DateTime nextSync=DateTime.MinValue; bool prompting; bool syncAgain; Point dragOrigin; bool dragging; Font labelFont=new Font("Segoe UI",9f,FontStyle.Regular,GraphicsUnit.Pixel); Font timeFont=new Font("Consolas",18f,FontStyle.Bold,GraphicsUnit.Pixel);
+  readonly bool smoke; readonly BackgroundWorker syncWorker=new BackgroundWorker(); readonly ToolStripMenuItem syncStatus=new ToolStripMenuItem("Sync: waiting"); DateTime nextSync=DateTime.MinValue; bool prompting; bool syncAgain; Point dragOrigin; bool dragging; Font labelFont=new Font("Segoe UI",9f,FontStyle.Regular,GraphicsUnit.Pixel); Font timeFont=new Font("Consolas",20f,FontStyle.Bold,GraphicsUnit.Pixel);
   public TimerWindow(Store data,bool smokeTest) {
    store=data;state=store.Load();smoke=smokeTest;
-   AutoScaleMode=AutoScaleMode.None; FormBorderStyle=FormBorderStyle.None; ClientSize=new Size(125,75);MinimumSize=MaximumSize=new Size(125,75);TopMost=true;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(23,29,34);DoubleBuffered=true;Text="OR Timer";
+   AutoScaleMode=AutoScaleMode.None; FormBorderStyle=FormBorderStyle.None; ClientSize=new Size(125,75);MinimumSize=MaximumSize=new Size(125,75);TopMost=true;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(17,18,17);DoubleBuffered=true;Text="OR Timer";
    windowIcon=LoadIcon(new Size(32,32));trayIcon=LoadIcon(SystemInformation.SmallIconSize);Icon=windowIcon;
    Location=new Point(Screen.PrimaryScreen.WorkingArea.Right-145,Screen.PrimaryScreen.WorkingArea.Top+20);
    menu.Items.Add("Start surgery   Ctrl+Shift+Alt+1",null,delegate{Act(1);});menu.Items.Add("End surgery   Ctrl+Shift+Alt+2",null,delegate{Act(2);});menu.Items.Add("End day   Ctrl+Shift+Alt+3",null,delegate{Act(3);});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Show timer",null,delegate{Show();Clamp();TopMost=true;});menu.Items.Add("Export history (CSV)...",null,delegate{Export();});menu.Items.Add("Open data folder",null,delegate{System.Diagnostics.Process.Start(Path.GetDirectoryName(store.PathName));});menu.Items.Add(new ToolStripSeparator());syncStatus.Enabled=false;menu.Items.Add(syncStatus);menu.Items.Add("Website sync details",null,delegate{MessageBox.Show(this,syncStatus.ToolTipText.Length==0?syncStatus.Text:syncStatus.ToolTipText,"Website history sync");});menu.Items.Add("Retry website sync now",null,delegate{BeginSync();});menu.Items.Add("Open website history",null,delegate{System.Diagnostics.Process.Start(SyncEngine.BaseUrl+"/history");});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Quit (keep timer running)",null,delegate{Close();});ContextMenuStrip=menu;
@@ -157,11 +157,32 @@ namespace SurgeryTimer {
   static string Duration(long seconds) {return String.Format(CultureInfo.InvariantCulture,"{0:00}:{1:00}:{2:00}",seconds/3600,(seconds/60)%60,seconds%60);}
   protected override void OnPaint(PaintEventArgs e) {
    base.OnPaint(e);long now=DateTime.UtcNow.Ticks;DrawRow(e.Graphics,"SURGERY",Duration(state.SurgerySeconds(now)),state.Phase=="surgery",Color.FromArgb(115,226,151),1);DrawRow(e.Graphics,"TURNOVER",Duration(state.TurnoverSeconds(now)),state.Phase=="turnover",Color.FromArgb(255,201,105),38);
-   using(var pen=new Pen(Color.FromArgb(57,67,75))) {e.Graphics.DrawRectangle(pen,0,0,124,74);e.Graphics.DrawLine(pen,6,37,118,37);}
+   DrawFrame(e.Graphics);
   }
+  void DrawFrame(Graphics g) {using(var pen=new Pen(Color.FromArgb(58,60,55))) {g.DrawRectangle(pen,0,0,124,74);g.DrawLine(pen,6,37,118,37);}}
   void DrawRow(Graphics g,string label,string duration,bool active,Color color,int y) {
-   using(var brush=new SolidBrush(active?color:Color.FromArgb(153,165,174))) {g.FillEllipse(brush,8,y+5,5,5);g.DrawString(label,labelFont,brush,17,y+1,StringFormat.GenericTypographic);}
-   using(var brush=new SolidBrush(active?color:Color.FromArgb(218,225,230)))g.DrawString(duration,timeFont,brush,7,y+13,StringFormat.GenericTypographic);
+   using(var brush=new SolidBrush(active?color:Color.FromArgb(139,145,132))) {g.FillEllipse(brush,8,y+4,4,4);g.DrawString(label,labelFont,brush,16,y,StringFormat.GenericTypographic);}
+   int digits=duration.Length-2, gap=1, colonWidth=5;
+   int cardWidth=Math.Min(15,(111-2*colonWidth-(duration.Length-1)*gap)/digits);
+   int totalWidth=digits*cardWidth+2*colonWidth+(duration.Length-1)*gap;
+   int x=(125-totalWidth)/2, top=y+12, height=22;
+   using(var format=new StringFormat(StringFormat.GenericTypographic)) {
+    format.Alignment=StringAlignment.Center;format.LineAlignment=StringAlignment.Center;format.FormatFlags|=StringFormatFlags.NoWrap;
+    foreach(char character in duration) {
+     if(character==':') {
+      using(var dot=new SolidBrush(active?Color.FromArgb(217,214,195):Color.FromArgb(139,140,128))) {g.FillRectangle(dot,x+2,top+7,2,2);g.FillRectangle(dot,x+2,top+14,2,2);}
+      x+=colonWidth+gap;continue;
+     }
+     using(var upper=new SolidBrush(Color.FromArgb(52,54,49)))g.FillRectangle(upper,x,top,cardWidth,height/2);
+     using(var lower=new SolidBrush(Color.FromArgb(39,41,37)))g.FillRectangle(lower,x,top+height/2,cardWidth,height-height/2);
+     using(var border=new Pen(Color.FromArgb(8,9,8)))g.DrawRectangle(border,x,top,cardWidth-1,height-1);
+     using(var highlight=new Pen(Color.FromArgb(75,78,69)))g.DrawLine(highlight,x+1,top+1,x+cardWidth-2,top+1);
+     using(var ink=new SolidBrush(active?Color.FromArgb(244,240,218):Color.FromArgb(188,187,169)))g.DrawString(character.ToString(),timeFont,ink,new RectangleF(x,top,cardWidth,height),format);
+     using(var seam=new Pen(Color.FromArgb(17,18,16)))g.DrawLine(seam,x,top+height/2,x+cardWidth-1,top+height/2);
+     using(var hinge=new Pen(Color.FromArgb(110,111,97))) {g.DrawLine(hinge,x,top+height/2,x+1,top+height/2);g.DrawLine(hinge,x+cardWidth-2,top+height/2,x+cardWidth-1,top+height/2);}
+     x+=cardWidth+gap;
+    }
+   }
   }
   void Export() {using(var dialog=new SaveFileDialog {Filter="CSV files (*.csv)|*.csv",FileName="OR-Timer-"+DateTime.Now.ToString("yyyy-MM-dd")+".csv"})if(dialog.ShowDialog(this)==DialogResult.OK)try{File.WriteAllText(dialog.FileName,Store.Csv(state),new UTF8Encoding(true));}catch(Exception e){MessageBox.Show(this,e.Message,"Export failed");}}
   void Smoke() {
@@ -189,6 +210,7 @@ namespace SurgeryTimer {
     }
     Tests.Check(Width==125 && Height==75 && ClientSize==new Size(125,75),"125 x 75 window");Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==9,"all global shortcuts and keypad alternatives registered");
     Tests.Check(Icon!=null && tray.Icon==trayIcon && trayIcon.Width==SystemInformation.SmallIconSize.Width,"custom executable and tray icon loaded");
+    using(var bmp=new Bitmap(125,75)) {using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawRow(g,"SURGERY","12:34:56",true,Color.FromArgb(115,226,151),1);DrawRow(g,"TURNOVER","00:08:23",false,Color.FromArgb(255,201,105),38);DrawFrame(g);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-flip-preview.png"));}
     SendMessage(Handle,0x0312,new IntPtr(7),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"End-key Start alternative");
     SendMessage(Handle,0x0312,new IntPtr(8),IntPtr.Zero);Tests.Check(state.CurrentSession.Cases.Count==1,"Numpad Start alternative does not duplicate active case");
     SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"original Start remains safe");

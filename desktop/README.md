@@ -2,6 +2,8 @@
 
 A small Windows desktop companion for the surgery timer website.
 
+The compact display uses retro split-flap digit tiles: matte charcoal panels, ivory numbers, a central seam, and small hinge details. Green and amber status lights identify the active surgery or turnover timer.
+
 The app uses a white and teal stopwatch icon for its executable and system tray. The Windows icon includes sizes from 16 to 256 pixels. Source artwork and icon assets are in `assets`; run `build-icon.ps1` to regenerate the Windows icon from its source PNG.
 
 ## Run
