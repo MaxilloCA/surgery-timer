@@ -16,12 +16,16 @@ namespace SurgeryTimer {
   [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
   [DllImport("user32.dll")]static extern IntPtr GetForegroundWindow();
   readonly List<int> registered=new List<int>();
+  readonly bool sharedDown;
+  internal int RegisteredShortcutCount {get{return registered.Count;}}
   readonly Label shortcutHint=new Label {AutoSize=false,Location=new Point(12,70),Size=new Size(305,38),Text="Ctrl+Shift+Alt + Up / Down to choose\nCtrl+Shift+Alt + Enter to start"};
   static uint PickerKey(int id) {return id==4?0x26u:id==5?0x28u:0x0Du;}
   readonly ComboBox field=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList};
   readonly Button start=new Button {Text="Start surgery",Location=new Point(120,116),Size=new Size(100,28),Enabled=false};
   public string AnesthetistName {get{return field.SelectedItem as string ?? String.Empty;}}
-  public NameDialog() {
+  public NameDialog():this(false) {}
+  public NameDialog(bool downOwnedByTimer) {
+   sharedDown=downOwnedByTimer;
    Text="Start a new surgery day";ClientSize=new Size(330,158);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterScreen;ShowInTaskbar=false;TopMost=true;
    Controls.Add(new Label {Text="Select anesthesiologist",AutoSize=true,Location=new Point(12,12)});
    using(var stream=typeof(NameDialog).Assembly.GetManifestResourceStream("anesthesiologists.json")) {
@@ -35,7 +39,7 @@ namespace SurgeryTimer {
   }
   protected override void OnHandleCreated(EventArgs e) {
    base.OnHandleCreated(e);var failures=new List<string>();
-   for(int id=4;id<=6;id++)if(RegisterHotKey(Handle,id,0x4000|1|2|4,PickerKey(id)))registered.Add(id);else failures.Add("Ctrl+Shift+Alt+"+(id==4?"Up":id==5?"Down":"Enter")+" (Windows error "+Marshal.GetLastWin32Error()+")");
+   for(int id=4;id<=6;id++){if(id==5 && sharedDown)continue;if(RegisterHotKey(Handle,id,0x4000|1|2|4,PickerKey(id)))registered.Add(id);else failures.Add("Ctrl+Shift+Alt+"+(id==4?"Up":id==5?"Down":"Enter")+" (Windows error "+Marshal.GetLastWin32Error()+")");}
    if(failures.Count>0){shortcutHint.Text="Unavailable: "+String.Join(", ",failures)+". Use mouse or focused arrow keys / Enter.";shortcutHint.ForeColor=Color.DarkRed;shortcutHint.Size=new Size(305,66);ClientSize=new Size(330,186);foreach(Control c in Controls)if(c is Button)c.Top=144;}
   }
   protected override void OnHandleDestroyed(EventArgs e) {foreach(int id in registered)UnregisterHotKey(Handle,id);registered.Clear();base.OnHandleDestroyed(e);}
@@ -43,6 +47,7 @@ namespace SurgeryTimer {
    if(id==4 || id==5){int count=field.Items.Count;if(count==0)return;field.DroppedDown=false;field.SelectedIndex=field.SelectedIndex<0?(id==4?count-1:0):Math.Max(0,Math.Min(count-1,field.SelectedIndex+(id==4?-1:1)));}
    else if(id==6 && field.SelectedIndex>=0){field.DroppedDown=false;start.PerformClick();}
   }
+  internal void HandleSharedDown() {PickerAction(5);}
   protected override void WndProc(ref Message m) {if(m.Msg==0x0312 && m.WParam.ToInt32()>=4 && m.WParam.ToInt32()<=6){PickerAction(m.WParam.ToInt32());return;}base.WndProc(ref m);}
   public static void VerifyPicker() {
    using(var dialog=new NameDialog()) {
