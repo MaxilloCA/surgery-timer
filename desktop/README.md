@@ -17,6 +17,8 @@ Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (include
 | Stop alternative / next name while picker is open | Ctrl+Shift+Alt+Down |
 | Stop alternative (numpad 2 with Num Lock on) | Ctrl+Shift+Alt+NumPad2 |
 | End day / finalize active phase | Ctrl+Shift+Alt+3 |
+| End day alternative (numpad 3 with Num Lock off) | Ctrl+Shift+Alt+PageDown |
+| End day alternative (numpad 3 with Num Lock on) | Ctrl+Shift+Alt+NumPad3 |
 | Previous anesthesiologist (while picker is open) | Ctrl+Shift+Alt+Up |
 | Next anesthesiologist (while picker is open) | Ctrl+Shift+Alt+Down |
 | Confirm selected anesthesiologist and start | Ctrl+Shift+Alt+Enter |

@@ -135,6 +135,8 @@ namespace SurgeryTimer {
    if(RegisterHotKey(Handle,8,0x4000|1|2|4,0x61))registered.Add(8);else failures.Add("Numpad 1 (Start alternative; Windows error "+Marshal.GetLastWin32Error()+")");
    if(RegisterHotKey(Handle,9,0x4000|1|2|4,0x28))registered.Add(9);else failures.Add("Down (Stop / picker next; Windows error "+Marshal.GetLastWin32Error()+")");
    if(RegisterHotKey(Handle,10,0x4000|1|2|4,0x62))registered.Add(10);else failures.Add("Numpad 2 (Stop alternative; Windows error "+Marshal.GetLastWin32Error()+")");
+   if(RegisterHotKey(Handle,11,0x4000|1|2|4,0x22))registered.Add(11);else failures.Add("Page Down (End day alternative; Windows error "+Marshal.GetLastWin32Error()+")");
+   if(RegisterHotKey(Handle,12,0x4000|1|2|4,0x63))registered.Add(12);else failures.Add("Numpad 3 (End day alternative; Windows error "+Marshal.GetLastWin32Error()+")");
    if(smoke) {BeginInvoke((Action)Smoke);return;}
    BeginSync();
    if(failures.Count>0)MessageBox.Show(this,"These shortcuts are already in use or unavailable: "+String.Join(", ",failures)+". Use the tray menu for those actions.","OR Timer shortcuts",MessageBoxButtons.OK,MessageBoxIcon.Warning);
@@ -151,7 +153,7 @@ namespace SurgeryTimer {
    try {var next=Store.Copy(state);if(next.Apply(action,DateTime.UtcNow.Ticks,name)){store.Save(next);state=next;Invalidate();BeginSync();}}
    catch(Exception e){if(smoke)throw;MessageBox.Show(this,"The action was NOT applied because it could not be saved. The previous timer is still running.\n\n"+e.Message,"OR Timer save failed",MessageBoxButtons.OK,MessageBoxIcon.Error);}
   }
-  protected override void WndProc(ref Message m) {if(m.Msg==0x0312){int id=m.WParam.ToInt32();if(id==9 || id==10){if(activePicker!=null && !activePicker.IsDisposed)activePicker.HandleSharedDown();else Act(2);}else Act(id==7 || id==8?1:id);return;}base.WndProc(ref m);}
+  protected override void WndProc(ref Message m) {if(m.Msg==0x0312){int id=m.WParam.ToInt32();if(id==9 || id==10){if(activePicker!=null && !activePicker.IsDisposed)activePicker.HandleSharedDown();else Act(2);}else Act(id==7 || id==8?1:id==11 || id==12?3:id);return;}base.WndProc(ref m);}
   static string Duration(long seconds) {return String.Format(CultureInfo.InvariantCulture,"{0:00}:{1:00}:{2:00}",seconds/3600,(seconds/60)%60,seconds%60);}
   protected override void OnPaint(PaintEventArgs e) {
    base.OnPaint(e);long now=DateTime.UtcNow.Ticks;DrawRow(e.Graphics,"SURGERY",Duration(state.SurgerySeconds(now)),state.Phase=="surgery",Color.FromArgb(115,226,151),1);DrawRow(e.Graphics,"TURNOVER",Duration(state.TurnoverSeconds(now)),state.Phase=="turnover",Color.FromArgb(255,201,105),38);
@@ -185,7 +187,7 @@ namespace SurgeryTimer {
       Tests.Check(result==DialogResult.OK,"modal picker confirms after shared Down navigation");
      }finally{activePicker=null;}
     }
-    Tests.Check(Width==125 && Height==75 && ClientSize==new Size(125,75),"125 x 75 window");Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==7,"all global shortcuts and Start/Stop alternatives registered");
+    Tests.Check(Width==125 && Height==75 && ClientSize==new Size(125,75),"125 x 75 window");Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==9,"all global shortcuts and keypad alternatives registered");
     Tests.Check(Icon!=null && tray.Icon==trayIcon && trayIcon.Width==SystemInformation.SmallIconSize.Width,"custom executable and tray icon loaded");
     SendMessage(Handle,0x0312,new IntPtr(7),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"End-key Start alternative");
     SendMessage(Handle,0x0312,new IntPtr(8),IntPtr.Zero);Tests.Check(state.CurrentSession.Cases.Count==1,"Numpad Start alternative does not duplicate active case");
@@ -194,11 +196,14 @@ namespace SurgeryTimer {
     SendMessage(Handle,0x0312,new IntPtr(9),IntPtr.Zero);Tests.Check(state.Phase=="turnover","Down stops surgery");
     SendMessage(Handle,0x0312,new IntPtr(2),IntPtr.Zero);Tests.Check(state.Phase=="turnover" && state.CurrentSession.Cases.Count==1,"original Stop remains safe");
     using(var bmp=new Bitmap(125,75)){DrawToBitmap(bmp,new Rectangle(0,0,125,75));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-turnover.png"));}
-    SendMessage(Handle,0x0312,new IntPtr(3),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[0].End.HasValue,"end day message");
+    SendMessage(Handle,0x0312,new IntPtr(11),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[0].End.HasValue,"Page Down ends day");
     SendMessage(Handle,0x0312,new IntPtr(8),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.Sessions.Count==2,"Numpad 1 starts a new day");
     SendMessage(Handle,0x0312,new IntPtr(10),IntPtr.Zero);Tests.Check(state.Phase=="turnover","numpad 2 stops surgery");
-    SendMessage(Handle,0x0312,new IntPtr(3),IntPtr.Zero);Tests.Check(state.Phase=="idle","new day finalized");
-    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: seven global registrations, End/numpad Start, Down/numpad Stop, shared picker Down routing without conflict, original shortcuts, timer transitions and screenshots.");
+    SendMessage(Handle,0x0312,new IntPtr(12),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[1].End.HasValue,"numpad 3 ends day");
+    SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery","original Start starts new day");
+    SendMessage(Handle,0x0312,new IntPtr(2),IntPtr.Zero);Tests.Check(state.Phase=="turnover","original Stop ends surgery");
+    SendMessage(Handle,0x0312,new IntPtr(3),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[2].End.HasValue,"original End day retained");
+    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: nine global registrations, End/Down/PageDown and numpad 1/2/3 alternatives, shared modal-picker Down routing, original 1/2/3 transitions and screenshots.");
    }catch(Exception e){Environment.ExitCode=1;File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"FAIL: "+e);}
    finally{Close();}
   }
