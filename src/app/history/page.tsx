@@ -29,7 +29,7 @@ export default function HistoryPage() {
   const [editing, setEditing] = useState<{ sessionId: string; record: CaseRecord; creating?: boolean; contextLabel?: string } | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
   const [deleting, setDeleting] = useState<
-    { kind: "day"; date: string } | { kind: "case" | "time"; sessionId: string; date: string; record: CaseRecord; field?: TimeField } | null
+    { kind: "day"; sessionId: string; date: string; anesthetistName: string } | { kind: "case" | "time"; sessionId: string; date: string; record: CaseRecord; field?: TimeField } | null
   >(null);
 
   async function reloadCases(sessionId: string) {
@@ -261,10 +261,10 @@ export default function HistoryPage() {
                             record: { id: crypto.randomUUID(), caseNumber: 0, surgeryStart: null, surgeryEnd: null, turnoverStart: null, turnoverEnd: null, surgeryDurationSec: null, turnoverDurationSec: null, notes: null } });
                         }}
                         className="mb-3 mr-2 min-h-11 rounded-lg border border-accent-teal/30 px-3 py-2 text-sm text-accent-teal hover:bg-accent-teal/10 disabled:opacity-50">Add missed case</button>
-                      <button type="button" aria-label={`Delete all history for ${formatDisplayDate(session.date)}`}
-                        onClick={() => { setSaveMessage(""); setDeleting({ kind: "day", date: session.date }); }}
-                        className="min-h-11 rounded-lg border border-red-400/30 px-3 py-2 text-sm text-red-400 hover:bg-red-400/10">Delete day</button>
-                      <p className="mt-2 text-xs text-text-muted">Deletes this date for all anesthesiologists, including any hidden by your filter.</p>
+                      <button type="button" aria-label={`Delete session for ${session.anesthetistName} on ${formatDisplayDate(session.date)}`}
+                        onClick={() => { setSaveMessage(""); setDeleting({ kind: "day", sessionId: session.id, date: session.date, anesthetistName: session.anesthetistName }); }}
+                        className="min-h-11 rounded-lg border border-red-400/30 px-3 py-2 text-sm text-red-400 hover:bg-red-400/10">Delete session</button>
+                      <p className="mt-2 text-xs text-text-muted">Deletes only this session. Other sessions on the same date are kept.</p>
                     </div>
                   </div>
                 )}
@@ -274,23 +274,22 @@ export default function HistoryPage() {
         </div>
       )}
       {deleting && <DeleteHistoryDialog
-        title={deleting.kind === "day" ? `Delete ${formatDisplayDate(deleting.date)}?` : deleting.kind === "time" ? `Delete ${timeFields.find(([key]) => key === deleting.field)?.[1].toLowerCase()} time?` : `Delete case #${deleting.record.caseNumber}?`}
+        title={deleting.kind === "day" ? "Delete this session?" : deleting.kind === "time" ? `Delete ${timeFields.find(([key]) => key === deleting.field)?.[1].toLowerCase()} time?` : `Delete case #${deleting.record.caseNumber}?`}
         description={deleting.kind === "day"
-          ? `All sessions, cases, surgery and turnover times, and notes for ${formatDisplayDate(deleting.date)} will be deleted for every anesthesiologist, including sessions hidden by your filter.`
+          ? `Only the selected session for ${deleting.anesthetistName} on ${formatDisplayDate(deleting.date)}, including its cases, times, and notes, will be deleted. Other sessions on this date will be kept, including other sessions for the same anesthesiologist.`
           : deleting.kind === "time" && deleting.field
             ? `${timeFields.find(([key]) => key === deleting.field)?.[1]}: ${displayTime(deleting.record[deleting.field])}, case #${deleting.record.caseNumber} for ${formatDisplayDate(deleting.date)}. Only this timestamp will be removed. Its duration will be unavailable until both start and stop times are entered.`
             : `Case #${deleting.record.caseNumber} for ${formatDisplayDate(deleting.date)}, including its surgery in/out, turnover in/out, and notes, will be deleted.`}
         endpoint={deleting.kind === "day" ? "/api/sessions" : "/api/cases"}
-        payload={deleting.kind === "day" ? { date: deleting.date } : deleting.kind === "time" ? { id: deleting.record.id, field: deleting.field, original: Object.fromEntries(timeFields.map(([key]) => [key, deleting.record[key]])) } : { id: deleting.record.id }}
+        payload={deleting.kind === "day" ? { sessionId: deleting.sessionId } : deleting.kind === "time" ? { id: deleting.record.id, field: deleting.field, original: Object.fromEntries(timeFields.map(([key]) => [key, deleting.record[key]])) } : { id: deleting.record.id }}
         onClose={() => setDeleting(null)}
         onConflict={() => { if (deleting.kind !== "day") void reloadCases(deleting.sessionId); }}
         onDeleted={(updated) => {
           if (deleting.kind === "day") {
-            const deletedSessionIds = new Set(sessions.filter((session) => session.date === deleting.date).map((session) => session.id));
-            setSessions((previous) => previous.filter((session) => session.date !== deleting.date));
-            setCasesBySession((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => !deletedSessionIds.has(id))));
-            if (expanded && deletedSessionIds.has(expanded)) setExpanded(null);
-            setSaveMessage(`All history for ${formatDisplayDate(deleting.date)} deleted. Shared statistics are updated.`);
+            setSessions((previous) => previous.filter((session) => session.id !== deleting.sessionId));
+            setCasesBySession((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => id !== deleting.sessionId)));
+            if (expanded === deleting.sessionId) setExpanded(null);
+            setSaveMessage(`${deleting.anesthetistName} session for ${formatDisplayDate(deleting.date)} deleted. Other sessions were kept.`);
           } else if (deleting.kind === "time" && updated) {
             setCasesBySession((previous) => ({ ...previous, [deleting.sessionId]: (previous[deleting.sessionId] ?? []).map((record) => record.id === updated.id ? updated : record) }));
             setSaveMessage(`Case #${updated.caseNumber} time deleted. Shared statistics are updated.`);

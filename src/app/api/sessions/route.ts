@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { sessions } from "@/lib/db/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 import { isUuid, isSessionDate } from "@/lib/desktop-sync";
 
-import { validateDeletion } from "@/lib/history-deletion";
+import { sessionDeletionFilter, validateDeletion } from "@/lib/history-deletion";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ export async function GET() {
       .where(isNull(sessions.deletedAt))
       .orderBy(desc(sessions.date));
 
-    return NextResponse.json(allSessions, { headers: { "X-OR-Timer-Desktop-Sync": "1", "X-OR-Timer-Deletion": "1" } });
+    return NextResponse.json(allSessions, { headers: { "X-OR-Timer-Desktop-Sync": "1", "X-OR-Timer-Deletion": "2" } });
   } catch (error) {
     console.error("GET /api/sessions error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -66,12 +66,12 @@ export async function GET() {
 export async function DELETE(req: NextRequest) {
   try {
     const body = await req.json();
-    const error = validateDeletion(body, "day");
+    const error = validateDeletion(body, "session");
     if (error) return NextResponse.json({ error }, { status: 400 });
-    // One atomic update covers every anesthetist's session on this date.
+    // Delete exactly the selected entry, including when other sessions share its date or provider.
     await getDb().update(sessions).set({ deletedAt: new Date() })
-      .where(and(eq(sessions.date, body.date), isNull(sessions.deletedAt)));
-    return NextResponse.json({ deleted: true, date: body.date });
+      .where(sessionDeletionFilter(body.sessionId));
+    return NextResponse.json({ deleted: true, sessionId: body.sessionId });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     console.error("DELETE /api/sessions error:", error);

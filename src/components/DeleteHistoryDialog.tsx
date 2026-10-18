@@ -7,7 +7,7 @@ export default function DeleteHistoryDialog({ title, description, endpoint, payl
   title: string;
   description: string;
   endpoint: string;
-  payload: { date: string } | { id: string; field?: TimeField; original?: Partial<CaseTimes> };
+  payload: { sessionId: string } | { id: string; field?: TimeField; original?: Partial<CaseTimes> };
   onClose: () => void;
   onDeleted: (updated?: CaseTimes) => void;
   onConflict?: () => void;
