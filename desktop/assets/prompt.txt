@@ -1,0 +1,6 @@
+Generated with the built-in image_gen tool, October 17, 2026.
+
+Create ONE finished square Windows app icon for a timer. Perfectly crisp clean flat geometric vector-style graphic, not distressed, no texture. Solid deep charcoal navy background filling the ENTIRE square canvas, opaque background. Center one simple stopwatch: thick smooth WHITE circular case, dark charcoal face, short centered white stem and short top rectangular rounded button, small white side pusher. A bold bright teal hand points to two o'clock; a matching teal elapsed wedge runs from twelve to two o'clock. Stopwatch height seventy-eight percent of canvas, entirely inside generous even margins. All shapes are smooth continuous solid fills, pristine edges. Extremely simple silhouette that reads at 16px; no text, no numbers, no tiny ticks, no shadows, no gradients, no other objects, no speckles, no chips, no scuffs, no transparent areas. Single icon, not an icon sheet or mockup.
+
+transparent_background: false
+Windows ICO frames are format conversions of the selected generated PNG.

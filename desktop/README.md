@@ -2,6 +2,8 @@
 
 A small Windows desktop companion for the surgery timer website.
 
+The app uses a white and teal stopwatch icon for its executable and system tray. The Windows icon includes sizes from 16 to 256 pixels. Source artwork and icon assets are in `assets`; run `build-icon.ps1` to regenerate the Windows icon from its source PNG.
+
 ## Run
 
 Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (included with modern Windows). It opens a 125 x 75 pixel timer and a system tray icon. Windows may place the icon in the tray overflow. Drag the timer to move it; it stays within a screen's working area. Right-click either the timer or the tray icon for controls.

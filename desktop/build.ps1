@@ -6,7 +6,9 @@ try {
     $roster = Join-Path $PSScriptRoot '../src/lib/anesthesiologists.json'
     if (!(Test-Path -LiteralPath $roster)) { $roster = Join-Path $PSScriptRoot 'anesthesiologists.json' }
     if (!(Test-Path -LiteralPath $roster)) { throw 'Anesthesiologist list not found.' }
-    & $compiler /nologo /target:winexe /platform:anycpu /optimize+ /out:ORTimer.exe "/resource:$roster,anesthesiologists.json" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll SurgeryTimer.cs WebsiteSync.cs
+    $icon = Join-Path $PSScriptRoot 'assets/ORTimer.ico'
+    if (!(Test-Path -LiteralPath $icon)) { throw 'Timer icon not found. Run build-icon.ps1 first.' }
+    & $compiler /nologo /target:winexe /platform:anycpu /optimize+ /out:ORTimer.exe "/win32icon:$icon" "/resource:$icon,ORTimer.ico" "/resource:$roster,anesthesiologists.json" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Web.Extensions.dll SurgeryTimer.cs WebsiteSync.cs
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 } finally { Pop-Location }
 

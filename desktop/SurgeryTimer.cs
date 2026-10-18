@@ -93,14 +93,22 @@ namespace SurgeryTimer {
   [DllImport("user32.dll")]static extern bool UnregisterHotKey(IntPtr hwnd,int id);
   [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
   readonly Store store; TimerState state; readonly NotifyIcon tray; readonly System.Windows.Forms.Timer clock;
+  readonly Icon windowIcon; readonly Icon trayIcon;
+  static Icon LoadIcon(Size size) {
+   using(var stream=typeof(TimerWindow).Assembly.GetManifestResourceStream("ORTimer.ico")) {
+    if(stream==null)throw new InvalidDataException("The timer icon is missing. Rebuild OR Timer.");
+    using(var icon=new Icon(stream,size))return (Icon)icon.Clone();
+   }
+  }
   readonly List<int> registered=new List<int>(); readonly ContextMenuStrip menu=new ContextMenuStrip();
   readonly bool smoke; readonly BackgroundWorker syncWorker=new BackgroundWorker(); readonly ToolStripMenuItem syncStatus=new ToolStripMenuItem("Sync: waiting"); DateTime nextSync=DateTime.MinValue; bool prompting; bool syncAgain; Point dragOrigin; bool dragging; Font labelFont=new Font("Segoe UI",9f,FontStyle.Regular,GraphicsUnit.Pixel); Font timeFont=new Font("Consolas",18f,FontStyle.Bold,GraphicsUnit.Pixel);
   public TimerWindow(Store data,bool smokeTest) {
    store=data;state=store.Load();smoke=smokeTest;
    AutoScaleMode=AutoScaleMode.None; FormBorderStyle=FormBorderStyle.None; ClientSize=new Size(125,75);MinimumSize=MaximumSize=new Size(125,75);TopMost=true;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(23,29,34);DoubleBuffered=true;Text="OR Timer";
+   windowIcon=LoadIcon(new Size(32,32));trayIcon=LoadIcon(SystemInformation.SmallIconSize);Icon=windowIcon;
    Location=new Point(Screen.PrimaryScreen.WorkingArea.Right-145,Screen.PrimaryScreen.WorkingArea.Top+20);
    menu.Items.Add("Start surgery   Ctrl+Shift+Alt+1",null,delegate{Act(1);});menu.Items.Add("End surgery   Ctrl+Shift+Alt+2",null,delegate{Act(2);});menu.Items.Add("End day   Ctrl+Shift+Alt+3",null,delegate{Act(3);});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Show timer",null,delegate{Show();Clamp();TopMost=true;});menu.Items.Add("Export history (CSV)...",null,delegate{Export();});menu.Items.Add("Open data folder",null,delegate{System.Diagnostics.Process.Start(Path.GetDirectoryName(store.PathName));});menu.Items.Add(new ToolStripSeparator());syncStatus.Enabled=false;menu.Items.Add(syncStatus);menu.Items.Add("Website sync details",null,delegate{MessageBox.Show(this,syncStatus.ToolTipText.Length==0?syncStatus.Text:syncStatus.ToolTipText,"Website history sync");});menu.Items.Add("Retry website sync now",null,delegate{BeginSync();});menu.Items.Add("Open website history",null,delegate{System.Diagnostics.Process.Start(SyncEngine.BaseUrl+"/history");});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Quit (keep timer running)",null,delegate{Close();});ContextMenuStrip=menu;
-   tray=new NotifyIcon {Icon=SystemIcons.Application,Text="OR Timer - right-click for controls",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=delegate{Show();Clamp();};
+   tray=new NotifyIcon {Icon=trayIcon,Text="OR Timer - right-click for controls",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=delegate{Show();Clamp();};
    clock=new System.Windows.Forms.Timer {Interval=250};clock.Tick+=delegate {Invalidate();if(!smoke && DateTime.UtcNow>=nextSync)BeginSync();};clock.Start();
    MouseDown+=delegate(object sender,MouseEventArgs e){if(e.Button==MouseButtons.Left){dragging=true;dragOrigin=e.Location;Capture=true;}};
    MouseMove+=delegate(object sender,MouseEventArgs e){if(dragging){Location=new Point(Location.X+e.X-dragOrigin.X,Location.Y+e.Y-dragOrigin.Y);Clamp();}};
@@ -154,6 +162,7 @@ namespace SurgeryTimer {
     NameDialog.VerifyPicker();
     using(var picker=new NameDialog()) {picker.Show(this);Application.DoEvents();using(var bmp=new Bitmap(picker.Width,picker.Height)){picker.DrawToBitmap(bmp,new Rectangle(0,0,picker.Width,picker.Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-picker.png"));}picker.Close();}
     Tests.Check(Width==125 && Height==75 && ClientSize==new Size(125,75),"125 x 75 window");Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==3,"all global shortcuts registered");
+    Tests.Check(Icon!=null && tray.Icon==trayIcon && trayIcon.Width==SystemInformation.SmallIconSize.Width,"custom executable and tray icon loaded");
     SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery","start message");
     using(var bmp=new Bitmap(125,75)){DrawToBitmap(bmp,new Rectangle(0,0,125,75));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery.png"));}
     SendMessage(Handle,0x0312,new IntPtr(2),IntPtr.Zero);Tests.Check(state.Phase=="turnover","end message");
@@ -163,7 +172,7 @@ namespace SurgeryTimer {
    }catch(Exception e){Environment.ExitCode=1;File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"FAIL: "+e);}
    finally{Close();}
   }
-  protected override void Dispose(bool disposing) {if(disposing){Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplayChanged;foreach(int id in registered)UnregisterHotKey(Handle,id);clock.Dispose();tray.Visible=false;tray.Dispose();menu.Dispose();labelFont.Dispose();timeFont.Dispose();}base.Dispose(disposing);}
+  protected override void Dispose(bool disposing) {if(disposing){Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplayChanged;foreach(int id in registered)UnregisterHotKey(Handle,id);clock.Dispose();tray.Visible=false;tray.Dispose();Icon=null;trayIcon.Dispose();windowIcon.Dispose();menu.Dispose();labelFont.Dispose();timeFont.Dispose();}base.Dispose(disposing);}
  }
  public static class Tests {
   public static void Check(bool ok,string name){if(!ok)throw new Exception("Failed: "+name);}
