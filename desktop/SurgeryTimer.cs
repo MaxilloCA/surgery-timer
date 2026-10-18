@@ -186,16 +186,17 @@ namespace SurgeryTimer {
   [DllImport("user32.dll")]static extern bool SetProcessDpiAwarenessContext(IntPtr context);
   static void EnableDpi(){try{if(SetProcessDpiAwarenessContext(new IntPtr(-4)))return;}catch(EntryPointNotFoundException){}SetProcessDPIAware();}
   [STAThread]static void Main(string[] args) {
-   bool self=Array.IndexOf(args,"--self-test")>=0,smoke=Array.IndexOf(args,"--smoke-test")>=0;string temporary=null;
+   bool self=Array.IndexOf(args,"--self-test")>=0,smoke=Array.IndexOf(args,"--smoke-test")>=0,picker=Array.IndexOf(args,"--picker-smoke-test")>=0;string temporary=null;
    try {
     if(self || smoke)temporary=Path.Combine(Path.GetTempPath(),"OR-Timer-Test-"+Guid.NewGuid().ToString("N"));
     if(self) {Tests.Run(temporary);File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"self-test-result.txt"),"PASS: deterministic transitions, repeated actions, durations, restart, day archival, CSV, atomic replacement, corruption recovery, mock sync ordering, acknowledgments, offline retry and identity checks.");return;}
+    if(picker){EnableDpi();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);bool foregroundVerified=NameDialog.VerifyGlobalPicker();File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"picker-smoke-test-result.txt"),"PASS: picker selection guards and boundaries, three global picker registrations, WM_HOTKEY navigation and confirmation while picker is not foreground, shortcuts released after closing. "+(foregroundVerified?"Foreground window remained unchanged during navigation.":"LIMITATION: foreground desktop unavailable (GetForegroundWindow returned 0); another foreground app could not be verified.")+" No system keyboard injection or production data access.");return;}
     bool first;using(var mutex=new Mutex(true,smoke?"Local\\OR-Timer-Smoke-"+Guid.NewGuid():"Local\\OR-Timer-Desktop-v1",out first)) {
      if(!first){MessageBox.Show("OR Timer is already running. Use its system tray icon.","OR Timer");return;}
      EnableDpi();Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
      Application.Run(new TimerWindow(new Store(temporary??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"OR Timer")),smoke));
     }
-   }catch(Exception e){Environment.ExitCode=1;if(self||smoke)File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,self?"self-test-result.txt":"smoke-test-result.txt"),"FAIL: "+e);else MessageBox.Show(e.Message,"OR Timer could not start",MessageBoxButtons.OK,MessageBoxIcon.Error);}
+   }catch(Exception e){Environment.ExitCode=1;if(self||smoke||picker)File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,self?"self-test-result.txt":picker?"picker-smoke-test-result.txt":"smoke-test-result.txt"),"FAIL: "+e);else MessageBox.Show(e.Message,"OR Timer could not start",MessageBoxButtons.OK,MessageBoxIcon.Error);}
    finally {if(temporary!=null && Directory.Exists(temporary))Directory.Delete(temporary,true);}
   }
  }

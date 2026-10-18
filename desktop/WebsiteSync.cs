@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -10,11 +11,18 @@ using System.Windows.Forms;
 
 namespace SurgeryTimer {
  public sealed class NameDialog : Form {
+  [DllImport("user32.dll",SetLastError=true)]static extern bool RegisterHotKey(IntPtr hwnd,int id,uint modifiers,uint key);
+  [DllImport("user32.dll")]static extern bool UnregisterHotKey(IntPtr hwnd,int id);
+  [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
+  [DllImport("user32.dll")]static extern IntPtr GetForegroundWindow();
+  readonly List<int> registered=new List<int>();
+  readonly Label shortcutHint=new Label {AutoSize=false,Location=new Point(12,70),Size=new Size(305,38),Text="Ctrl+Shift+Alt + Up / Down to choose\nCtrl+Shift+Alt + Enter to start"};
+  static uint PickerKey(int id) {return id==4?0x26u:id==5?0x28u:0x0Du;}
   readonly ComboBox field=new ComboBox {DropDownStyle=ComboBoxStyle.DropDownList};
-  readonly Button start=new Button {Text="Start surgery",Location=new Point(120,78),Size=new Size(100,28),Enabled=false};
+  readonly Button start=new Button {Text="Start surgery",Location=new Point(120,116),Size=new Size(100,28),Enabled=false};
   public string AnesthetistName {get{return field.SelectedItem as string ?? String.Empty;}}
   public NameDialog() {
-   Text="Start a new surgery day";ClientSize=new Size(330,124);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterScreen;ShowInTaskbar=false;TopMost=true;
+   Text="Start a new surgery day";ClientSize=new Size(330,158);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterScreen;ShowInTaskbar=false;TopMost=true;
    Controls.Add(new Label {Text="Select anesthesiologist",AutoSize=true,Location=new Point(12,12)});
    using(var stream=typeof(NameDialog).Assembly.GetManifestResourceStream("anesthesiologists.json")) {
     if(stream==null)throw new InvalidDataException("The anesthesiologist list is missing. Rebuild OR Timer.");
@@ -22,8 +30,20 @@ namespace SurgeryTimer {
    }
    field.Location=new Point(12,36);field.Width=305;field.SelectedIndex=-1;field.SelectedIndexChanged+=delegate{start.Enabled=field.SelectedIndex>=0;};Controls.Add(field);
    start.Click+=delegate{if(field.SelectedIndex<0){field.Focus();return;}DialogResult=DialogResult.OK;Close();};Controls.Add(start);
-   var cancel=new Button {Text="Cancel",Location=new Point(230,78),Size=new Size(87,28),DialogResult=DialogResult.Cancel};Controls.Add(cancel);AcceptButton=start;CancelButton=cancel;
+   Controls.Add(shortcutHint);
+   var cancel=new Button {Text="Cancel",Location=new Point(230,116),Size=new Size(87,28),DialogResult=DialogResult.Cancel};Controls.Add(cancel);AcceptButton=start;CancelButton=cancel;
   }
+  protected override void OnHandleCreated(EventArgs e) {
+   base.OnHandleCreated(e);var failures=new List<string>();
+   for(int id=4;id<=6;id++)if(RegisterHotKey(Handle,id,0x4000|1|2|4,PickerKey(id)))registered.Add(id);else failures.Add("Ctrl+Shift+Alt+"+(id==4?"Up":id==5?"Down":"Enter")+" (Windows error "+Marshal.GetLastWin32Error()+")");
+   if(failures.Count>0){shortcutHint.Text="Unavailable: "+String.Join(", ",failures)+". Use mouse or focused arrow keys / Enter.";shortcutHint.ForeColor=Color.DarkRed;shortcutHint.Size=new Size(305,66);ClientSize=new Size(330,186);foreach(Control c in Controls)if(c is Button)c.Top=144;}
+  }
+  protected override void OnHandleDestroyed(EventArgs e) {foreach(int id in registered)UnregisterHotKey(Handle,id);registered.Clear();base.OnHandleDestroyed(e);}
+  void PickerAction(int id) {
+   if(id==4 || id==5){int count=field.Items.Count;if(count==0)return;field.DroppedDown=false;field.SelectedIndex=field.SelectedIndex<0?(id==4?count-1:0):Math.Max(0,Math.Min(count-1,field.SelectedIndex+(id==4?-1:1)));}
+   else if(id==6 && field.SelectedIndex>=0){field.DroppedDown=false;start.PerformClick();}
+  }
+  protected override void WndProc(ref Message m) {if(m.Msg==0x0312 && m.WParam.ToInt32()>=4 && m.WParam.ToInt32()<=6){PickerAction(m.WParam.ToInt32());return;}base.WndProc(ref m);}
   public static void VerifyPicker() {
    using(var dialog=new NameDialog()) {
     Tests.Check(dialog.field.DropDownStyle==ComboBoxStyle.DropDownList,"picker rejects typed names");
@@ -38,7 +58,35 @@ namespace SurgeryTimer {
     dialog.field.SelectedIndex=0;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName==".surgi - Dr. Chan","first selection value");
     dialog.field.SelectedIndex=15;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName=="rvh - Dr. Zoratto","last selection value");
     dialog.field.SelectedIndex=-1;Tests.Check(!dialog.start.Enabled && dialog.AnesthetistName==String.Empty,"cleared selection cannot start");
+    dialog.PickerAction(6);Tests.Check(dialog.DialogResult!=DialogResult.OK,"global Enter requires explicit selection");
+    dialog.PickerAction(5);Tests.Check(dialog.field.SelectedIndex==0,"global Down from no selection chooses first");
+    dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==0,"global Up clamps first");
+    dialog.field.SelectedIndex=-1;dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==15,"global Up from no selection chooses last");
+    dialog.PickerAction(5);Tests.Check(dialog.field.SelectedIndex==15,"global Down clamps last");
+    dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==14,"global Up moves previous");
    }
+  }
+  public static bool VerifyGlobalPicker() {
+   VerifyPicker();
+   bool foregroundVerified=false;
+   using(var focus=new Form {Text="OR Timer isolated shortcut test",Size=new Size(260,100),StartPosition=FormStartPosition.CenterScreen}) {
+    focus.Show();
+    using(var dialog=new NameDialog()) {
+     dialog.Show();Application.DoEvents();Tests.Check(dialog.registered.Count==3,"all three picker global shortcuts registered");
+     focus.Activate();Application.DoEvents();
+     IntPtr foreground=GetForegroundWindow();foregroundVerified=foreground!=IntPtr.Zero;Tests.Check(foreground!=dialog.Handle,"picker is not the foreground window");
+     SendMessage(dialog.Handle,0x0312,new IntPtr(6),IntPtr.Zero);Tests.Check(dialog.Visible && dialog.DialogResult!=DialogResult.OK,"background Enter with no selection does not start");
+     SendMessage(dialog.Handle,0x0312,new IntPtr(5),IntPtr.Zero);Tests.Check(dialog.AnesthetistName==".surgi - Dr. Chan","background global Down selects first");
+     SendMessage(dialog.Handle,0x0312,new IntPtr(5),IntPtr.Zero);Tests.Check(dialog.AnesthetistName==".surgi - Dr. Taylor","background global Down advances");
+     SendMessage(dialog.Handle,0x0312,new IntPtr(4),IntPtr.Zero);Tests.Check(dialog.AnesthetistName==".surgi - Dr. Chan","background global Up returns previous");
+     if(foregroundVerified)Tests.Check(GetForegroundWindow()==foreground,"navigation does not require or steal focus");
+     SendMessage(dialog.Handle,0x0312,new IntPtr(6),IntPtr.Zero);Tests.Check(dialog.DialogResult==DialogResult.OK,"background global Enter confirms selection");
+    }
+    var released=new List<int>();
+    try {for(int id=4;id<=6;id++){Tests.Check(RegisterHotKey(focus.Handle,id,0x4000|1|2|4,PickerKey(id)),"picker shortcut released after close");released.Add(id);}}
+    finally {foreach(int id in released)UnregisterHotKey(focus.Handle,id);focus.Close();}
+   }
+   return foregroundVerified;
   }
  }
  public interface ISyncTransport {string Post(string path,string json);}
