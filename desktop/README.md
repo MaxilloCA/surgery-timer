@@ -8,7 +8,9 @@ The app uses a white and teal stopwatch icon for its executable and system tray.
 
 ## Run
 
-Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (included with modern Windows). It opens a 125 x 75 pixel timer and a system tray icon. Windows may place the icon in the tray overflow. Drag the timer to move it; it stays within a screen's working area. Right-click either the timer or the tray icon for controls.
+Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (included with modern Windows). It opens a timer and a system tray icon. Windows may place the icon in the tray overflow. Drag the timer to move it; it stays within a screen's working area. Right-click either the timer or the tray icon for controls.
+
+Choose **Size → Small (120 × 80)** or **Size → Large (210 × 140)** in the right-click menu. The flip-clock display scales with the window. The app remembers your choice between launches; Large is the initial default. Resizing does not reset either timer.
 
 | Action | Global keyboard shortcut |
 | --- | --- |
@@ -29,7 +31,7 @@ Use the number row above the letters. The shortcuts work when another ordinary d
 
 Starting a new day asks you to select an anesthesiologist from the same fixed list used by the iPhone website. The .surgi names appear first, then rvh names, alphabetically within each group. No name is selected automatically, and Start surgery stays disabled until you select one. Ctrl+Shift+Alt+Down chooses the first name, and Ctrl+Shift+Alt+Up chooses the last name when nothing is selected; further presses move through the list and stop at its ends. Ctrl+Shift+Alt+Enter confirms the selection. All six shortcuts work while another desktop application is active, including the picker navigation and confirmation. Up and Enter are registered while the picker is open. Down is shared with the timer: it selects the next name while the picker is open and stops surgery when it is closed. If a picker shortcut is unavailable, the dialog names it and mouse or ordinary focused keyboard controls remain available. Timing starts after you confirm. Existing saved history retains its original names. The surgery and turnover durations are both shown as hours:minutes:seconds. Green indicates active surgery; amber indicates active turnover. End day retains history and resets the display. Starting again creates a fresh session. An unfinished session is not silently reset at midnight.
 
-The timer is always above ordinary desktop windows and does not appear in the taskbar. Windows secure screens and some exclusive fullscreen programs can cover it. It is deliberately 125 x 75 physical pixels, even when Windows display scaling is enabled, so text is small on high-resolution displays. This version does not automatically start at Windows sign-in.
+The timer is always above ordinary desktop windows and does not appear in the taskbar. Windows secure screens and some exclusive fullscreen programs can cover it. Small and Large use physical pixels, including when Windows display scaling is enabled. This version does not automatically start at Windows sign-in.
 
 ## Data and restart
 

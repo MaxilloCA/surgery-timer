@@ -24,9 +24,10 @@ namespace SurgeryTimer {
  }
  public sealed class TimerState {
   public int Version {get;set;} public string Phase {get;set;}
+  public string DisplaySize {get;set;}
   public Dictionary<string,string> Acknowledged {get;set;}
   public List<SessionRecord> Sessions {get;set;}
-  public TimerState() {Version=1; Phase="idle"; Acknowledged=new Dictionary<string,string>(); Sessions=new List<SessionRecord>();}
+  public TimerState() {Version=1; Phase="idle"; DisplaySize="large"; Acknowledged=new Dictionary<string,string>(); Sessions=new List<SessionRecord>();}
   [ScriptIgnore] public SessionRecord CurrentSession {get {return Sessions.Count==0 || Sessions[Sessions.Count-1].End.HasValue ? null : Sessions[Sessions.Count-1];}}
   [ScriptIgnore] public CaseRecord CurrentCase {get {var s=CurrentSession; return s==null || s.Cases.Count==0 ? null : s.Cases[s.Cases.Count-1];}}
   public bool Apply(int action,long now) {return Apply(action,now,"Test anesthetist");}
@@ -62,7 +63,7 @@ namespace SurgeryTimer {
    if(s==null || s.Version!=1 || s.Sessions==null || (s.Phase!="idle" && s.Phase!="surgery" && s.Phase!="turnover"))throw new InvalidDataException("Invalid state format.");
    for(int i=0;i<s.Sessions.Count;i++) {var session=s.Sessions[i];if(session==null || String.IsNullOrEmpty(session.Id) || session.Cases==null || session.Cases.Count==0 || (i<s.Sessions.Count-1 && !session.End.HasValue))throw new InvalidDataException("Invalid session.");foreach(var c in session.Cases)if(c==null || c.Start<=0 || (c.End.HasValue && c.End<c.Start) || (c.TurnoverEnd.HasValue && (!c.End.HasValue || c.TurnoverEnd<c.End)))throw new InvalidDataException("Invalid case.");}
    if((s.Phase=="idle" && s.CurrentSession!=null) || (s.Phase!="idle" && s.CurrentCase==null) || (s.Phase=="surgery" && s.CurrentCase.End.HasValue) || (s.Phase=="turnover" && (!s.CurrentCase.End.HasValue || s.CurrentCase.TurnoverEnd.HasValue)))throw new InvalidDataException("Invalid active phase.");
-   if(s.Acknowledged==null)s.Acknowledged=new Dictionary<string,string>();return s;
+   if(s.Acknowledged==null)s.Acknowledged=new Dictionary<string,string>();if(s.DisplaySize!="small" && s.DisplaySize!="large")s.DisplaySize="large";return s;
   }
   public TimerState Load() {
    if(!File.Exists(PathName) && !File.Exists(PathName+".bak"))return new TimerState();
@@ -89,6 +90,7 @@ namespace SurgeryTimer {
   }
  }
  public sealed class TimerWindow : Form {
+  static Size DisplayDimensions(string size) {return size=="small"?new Size(120,80):new Size(210,140);}
   [DllImport("user32.dll",SetLastError=true)]static extern bool RegisterHotKey(IntPtr hwnd,int id,uint modifiers,uint key);
   [DllImport("user32.dll")]static extern bool UnregisterHotKey(IntPtr hwnd,int id);
   [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
@@ -102,13 +104,16 @@ namespace SurgeryTimer {
    }
   }
   readonly List<int> registered=new List<int>(); readonly ContextMenuStrip menu=new ContextMenuStrip();
+  readonly ToolStripMenuItem smallSize=new ToolStripMenuItem("Small (120 × 80)"); readonly ToolStripMenuItem largeSize=new ToolStripMenuItem("Large (210 × 140)");
   readonly bool smoke; readonly BackgroundWorker syncWorker=new BackgroundWorker(); readonly ToolStripMenuItem syncStatus=new ToolStripMenuItem("Sync: waiting"); DateTime nextSync=DateTime.MinValue; bool prompting; bool syncAgain; Point dragOrigin; bool dragging; Font labelFont=new Font("Segoe UI",9f,FontStyle.Regular,GraphicsUnit.Pixel); Font timeFont=new Font("Consolas",20f,FontStyle.Bold,GraphicsUnit.Pixel);
   public TimerWindow(Store data,bool smokeTest) {
    store=data;state=store.Load();smoke=smokeTest;
-   AutoScaleMode=AutoScaleMode.None; FormBorderStyle=FormBorderStyle.None; ClientSize=new Size(125,75);MinimumSize=MaximumSize=new Size(125,75);TopMost=true;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(17,18,17);DoubleBuffered=true;Text="OR Timer";
+   AutoScaleMode=AutoScaleMode.None; FormBorderStyle=FormBorderStyle.None; MinimumSize=DisplayDimensions("small");MaximumSize=DisplayDimensions("large");ClientSize=DisplayDimensions(state.DisplaySize);TopMost=true;ShowInTaskbar=false;StartPosition=FormStartPosition.Manual;BackColor=Color.FromArgb(17,18,17);DoubleBuffered=true;Text="OR Timer";
    windowIcon=LoadIcon(new Size(32,32));trayIcon=LoadIcon(SystemInformation.SmallIconSize);Icon=windowIcon;
-   Location=new Point(Screen.PrimaryScreen.WorkingArea.Right-145,Screen.PrimaryScreen.WorkingArea.Top+20);
+   Location=new Point(Screen.PrimaryScreen.WorkingArea.Right-Width-20,Screen.PrimaryScreen.WorkingArea.Top+20);
    menu.Items.Add("Start surgery   Ctrl+Shift+Alt+1",null,delegate{Act(1);});menu.Items.Add("End surgery   Ctrl+Shift+Alt+2",null,delegate{Act(2);});menu.Items.Add("End day   Ctrl+Shift+Alt+3",null,delegate{Act(3);});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Show timer",null,delegate{Show();Clamp();TopMost=true;});menu.Items.Add("Export history (CSV)...",null,delegate{Export();});menu.Items.Add("Open data folder",null,delegate{System.Diagnostics.Process.Start(Path.GetDirectoryName(store.PathName));});menu.Items.Add(new ToolStripSeparator());syncStatus.Enabled=false;menu.Items.Add(syncStatus);menu.Items.Add("Website sync details",null,delegate{MessageBox.Show(this,syncStatus.ToolTipText.Length==0?syncStatus.Text:syncStatus.ToolTipText,"Website history sync");});menu.Items.Add("Retry website sync now",null,delegate{BeginSync();});menu.Items.Add("Open website history",null,delegate{System.Diagnostics.Process.Start(SyncEngine.BaseUrl+"/history");});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Quit (keep timer running)",null,delegate{Close();});ContextMenuStrip=menu;
+   smallSize.Click+=delegate{SetDisplaySize("small");};largeSize.Click+=delegate{SetDisplaySize("large");};
+   var sizes=new ToolStripMenuItem("Size");sizes.DropDownItems.Add(smallSize);sizes.DropDownItems.Add(largeSize);menu.Items.Insert(menu.Items.Count-1,sizes);ApplyDisplaySize();
    tray=new NotifyIcon {Icon=trayIcon,Text="OR Timer - right-click for controls",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=delegate{Show();Clamp();};
    clock=new System.Windows.Forms.Timer {Interval=250};clock.Tick+=delegate {Invalidate();if(!smoke && DateTime.UtcNow>=nextSync)BeginSync();};clock.Start();
    MouseDown+=delegate(object sender,MouseEventArgs e){if(e.Button==MouseButtons.Left){dragging=true;dragOrigin=e.Location;Capture=true;}};
@@ -126,6 +131,12 @@ namespace SurgeryTimer {
    Microsoft.Win32.SystemEvents.DisplaySettingsChanged+=DisplayChanged;
   }
   void DisplayChanged(object sender,EventArgs e) {if(!IsDisposed && IsHandleCreated)BeginInvoke((Action)Clamp);}
+  void ApplyDisplaySize() {ClientSize=DisplayDimensions(state.DisplaySize);smallSize.Checked=state.DisplaySize=="small";largeSize.Checked=!smallSize.Checked;Clamp();Invalidate();}
+  void SetDisplaySize(string size) {
+   if(size==state.DisplaySize)return;
+   try {var next=Store.Copy(state);next.DisplaySize=size;store.Save(next);state=next;ApplyDisplaySize();}
+   catch(Exception error){if(smoke)throw;MessageBox.Show(this,"Unable to save the display size.\n\n"+error.Message,"OR Timer size",MessageBoxButtons.OK,MessageBoxIcon.Error);}
+  }
   void Clamp() {var area=Screen.FromRectangle(Bounds).WorkingArea;Location=new Point(Math.Max(area.Left,Math.Min(Left,area.Right-Width)),Math.Max(area.Top,Math.Min(Top,area.Bottom-Height)));}
   protected override bool ShowWithoutActivation {get{return true;}}
   protected override void OnShown(EventArgs e) {
@@ -156,8 +167,12 @@ namespace SurgeryTimer {
   protected override void WndProc(ref Message m) {if(m.Msg==0x0312){int id=m.WParam.ToInt32();if(id==9 || id==10){if(activePicker!=null && !activePicker.IsDisposed)activePicker.HandleSharedDown();else Act(2);}else Act(id==7 || id==8?1:id==11 || id==12?3:id);return;}base.WndProc(ref m);}
   static string Duration(long seconds) {return String.Format(CultureInfo.InvariantCulture,"{0:00}:{1:00}:{2:00}",seconds/3600,(seconds/60)%60,seconds%60);}
   protected override void OnPaint(PaintEventArgs e) {
-   base.OnPaint(e);long now=DateTime.UtcNow.Ticks;DrawRow(e.Graphics,"SURGERY",Duration(state.SurgerySeconds(now)),state.Phase=="surgery",Color.FromArgb(115,226,151),1);DrawRow(e.Graphics,"TURNOVER",Duration(state.TurnoverSeconds(now)),state.Phase=="turnover",Color.FromArgb(255,201,105),38);
-   DrawFrame(e.Graphics);
+   base.OnPaint(e);long now=DateTime.UtcNow.Ticks;DrawTimer(e.Graphics,Duration(state.SurgerySeconds(now)),Duration(state.TurnoverSeconds(now)),state.Phase=="surgery",state.Phase=="turnover");
+  }
+  void DrawTimer(Graphics g,string surgery,string turnover,bool surgeryActive,bool turnoverActive) {
+   var drawingState=g.Save();
+   try {g.ScaleTransform(ClientSize.Width/125f,ClientSize.Height/75f);DrawRow(g,"SURGERY",surgery,surgeryActive,Color.FromArgb(115,226,151),1);DrawRow(g,"TURNOVER",turnover,turnoverActive,Color.FromArgb(255,201,105),38);DrawFrame(g);}
+   finally {g.Restore(drawingState);}
   }
   void DrawFrame(Graphics g) {using(var pen=new Pen(Color.FromArgb(58,60,55))) {g.DrawRectangle(pen,0,0,124,74);g.DrawLine(pen,6,37,118,37);}}
   void DrawRow(Graphics g,string label,string duration,bool active,Color color,int y) {
@@ -208,16 +223,22 @@ namespace SurgeryTimer {
       Tests.Check(result==DialogResult.OK,"modal picker confirms after shared Down navigation");
      }finally{activePicker=null;}
     }
-    Tests.Check(Width==125 && Height==75 && ClientSize==new Size(125,75),"125 x 75 window");Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==9,"all global shortcuts and keypad alternatives registered");
+    smallSize.PerformClick();Tests.Check(ClientSize==new Size(120,80) && smallSize.Checked && !largeSize.Checked,"Small menu applies 120 x 80");
+    Tests.Check(store.Load().DisplaySize=="small","size preference persisted");
+    using(var resumed=new TimerWindow(store,true)){Tests.Check(resumed.ClientSize==new Size(120,80),"restart restores chosen size");}
+    using(var bmp=new Bitmap(Width,Height)){using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-small-preview.png"));}
+    largeSize.PerformClick();Tests.Check(ClientSize==new Size(210,140) && largeSize.Checked && !smallSize.Checked,"Large menu applies 210 x 140");
+    Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==9,"all global shortcuts and keypad alternatives registered");
     Tests.Check(Icon!=null && tray.Icon==trayIcon && trayIcon.Width==SystemInformation.SmallIconSize.Width,"custom executable and tray icon loaded");
-    using(var bmp=new Bitmap(125,75)) {using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawRow(g,"SURGERY","12:34:56",true,Color.FromArgb(115,226,151),1);DrawRow(g,"TURNOVER","00:08:23",false,Color.FromArgb(255,201,105),38);DrawFrame(g);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-flip-preview.png"));}
+    using(var bmp=new Bitmap(Width,Height)) {using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-flip-preview.png"));}
     SendMessage(Handle,0x0312,new IntPtr(7),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"End-key Start alternative");
+    long runningStart=state.CurrentCase.Start;smallSize.PerformClick();largeSize.PerformClick();Tests.Check(state.Phase=="surgery" && state.CurrentCase.Start==runningStart && state.CurrentSession.Cases.Count==1,"resizing preserves running timer");
     SendMessage(Handle,0x0312,new IntPtr(8),IntPtr.Zero);Tests.Check(state.CurrentSession.Cases.Count==1,"Numpad Start alternative does not duplicate active case");
     SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"original Start remains safe");
-    using(var bmp=new Bitmap(125,75)){DrawToBitmap(bmp,new Rectangle(0,0,125,75));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery.png"));}
+    using(var bmp=new Bitmap(Width,Height)){DrawToBitmap(bmp,new Rectangle(0,0,Width,Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery.png"));}
     SendMessage(Handle,0x0312,new IntPtr(9),IntPtr.Zero);Tests.Check(state.Phase=="turnover","Down stops surgery");
     SendMessage(Handle,0x0312,new IntPtr(2),IntPtr.Zero);Tests.Check(state.Phase=="turnover" && state.CurrentSession.Cases.Count==1,"original Stop remains safe");
-    using(var bmp=new Bitmap(125,75)){DrawToBitmap(bmp,new Rectangle(0,0,125,75));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-turnover.png"));}
+    using(var bmp=new Bitmap(Width,Height)){DrawToBitmap(bmp,new Rectangle(0,0,Width,Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-turnover.png"));}
     SendMessage(Handle,0x0312,new IntPtr(11),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[0].End.HasValue,"Page Down ends day");
     SendMessage(Handle,0x0312,new IntPtr(8),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.Sessions.Count==2,"Numpad 1 starts a new day");
     SendMessage(Handle,0x0312,new IntPtr(10),IntPtr.Zero);Tests.Check(state.Phase=="turnover","numpad 2 stops surgery");
@@ -225,7 +246,7 @@ namespace SurgeryTimer {
     SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery","original Start starts new day");
     SendMessage(Handle,0x0312,new IntPtr(2),IntPtr.Zero);Tests.Check(state.Phase=="turnover","original Stop ends surgery");
     SendMessage(Handle,0x0312,new IntPtr(3),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[2].End.HasValue,"original End day retained");
-    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: nine global registrations, End/Down/PageDown and numpad 1/2/3 alternatives, shared modal-picker Down routing, original 1/2/3 transitions and screenshots.");
+    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: Small/Large size menu, saved size restored on restart, resizing preserves running timer, nine global registrations, keypad alternatives, modal-picker Down routing, original timer transitions and screenshots.");
    }catch(Exception e){Environment.ExitCode=1;File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"FAIL: "+e);}
    finally{Close();}
   }
