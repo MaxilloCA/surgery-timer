@@ -11,6 +11,8 @@ Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (include
 | Action | Global keyboard shortcut |
 | --- | --- |
 | Start surgery / finish previous turnover | Ctrl+Shift+Alt+1 |
+| Start alternative (numpad 1 with Num Lock off) | Ctrl+Shift+Alt+End |
+| Start alternative (numpad 1 with Num Lock on) | Ctrl+Shift+Alt+NumPad1 |
 | End surgery / start turnover | Ctrl+Shift+Alt+2 |
 | End day / finalize active phase | Ctrl+Shift+Alt+3 |
 | Previous anesthesiologist (while picker is open) | Ctrl+Shift+Alt+Up |
