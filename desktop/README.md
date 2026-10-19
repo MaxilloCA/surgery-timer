@@ -25,6 +25,7 @@ Choose **Size → Small (120 × 80)** or **Size → Large (210 × 140)** in the 
 | End day / finalize active phase | Ctrl+Shift+Alt+3 |
 | End day alternative (numpad 3 with Num Lock off) | Ctrl+Shift+Alt+PageDown |
 | End day alternative (numpad 3 with Num Lock on) | Ctrl+Shift+Alt+NumPad3 |
+| End day alternative when the keypad releases Shift before Page Down | Ctrl+Alt+PageDown |
 | Previous anesthesiologist (while picker is open) | Ctrl+Shift+Alt+Up |
 | Next anesthesiologist (while picker is open) | Ctrl+Shift+Alt+Down |
 | Confirm selected anesthesiologist and start | Ctrl+Shift+Alt+Enter |
