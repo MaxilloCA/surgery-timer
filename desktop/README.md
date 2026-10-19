@@ -12,6 +12,8 @@ Double-click `ORTimer.exe` on Windows with .NET Framework 4.x installed (include
 
 Choose **Size → Small (120 × 80)** or **Size → Large (210 × 140)** in the right-click menu. The flip-clock display scales with the window. The app remembers your choice between launches; Large is the initial default. Resizing does not reset either timer.
 
+Uncheck **Show turnover timer** in the same menu to show only the surgery clock, centred in the selected window size. Check it again to restore both clocks. This preference is remembered between launches. Hiding the turnover clock does not stop turnover timing, recording, or website synchronization.
+
 | Action | Global keyboard shortcut |
 | --- | --- |
 | Start surgery / finish previous turnover | Ctrl+Shift+Alt+1 |

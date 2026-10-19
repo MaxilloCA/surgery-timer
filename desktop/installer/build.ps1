@@ -28,5 +28,5 @@ try {
 if ((Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash -ne $beforeHash) {
     throw 'Payload changed during installer build; rebuild from a stable executable.'
 }
-Get-Item -LiteralPath (Join-Path $output 'OR-Timer-Setup-1.0.0.exe')
+Get-Item -LiteralPath (Join-Path $output 'OR-Timer-Setup-1.0.1.exe')
 Write-Output "Packaged ORTimer.exe SHA256: $beforeHash"

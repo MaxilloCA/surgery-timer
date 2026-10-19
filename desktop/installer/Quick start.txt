@@ -18,6 +18,11 @@ Original Ctrl + Shift + Alt + 1 / 2 / 3 shortcuts also work.
 SIZE
 Right-click > Size > Small (120 x 80) or Large (210 x 140).
 
+SURGERY-ONLY DISPLAY
+Right-click > Show turnover timer. This starts checked. Uncheck it to show only
+the surgery timer. The app remembers your choice. Both sizes work in either
+display mode; turnover timing, saved history, uploads, and shortcuts continue.
+
 SHARED HISTORY
 The app saves locally and uploads history to https://surgery-timer.vercel.app.
 Use Open website history to edit times or delete a case or session.

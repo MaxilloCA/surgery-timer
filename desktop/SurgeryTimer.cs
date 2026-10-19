@@ -25,9 +25,10 @@ namespace SurgeryTimer {
  public sealed class TimerState {
   public int Version {get;set;} public string Phase {get;set;}
   public string DisplaySize {get;set;}
+  public bool ShowTurnoverTimer {get;set;}
   public Dictionary<string,string> Acknowledged {get;set;}
   public List<SessionRecord> Sessions {get;set;}
-  public TimerState() {Version=1; Phase="idle"; DisplaySize="large"; Acknowledged=new Dictionary<string,string>(); Sessions=new List<SessionRecord>();}
+  public TimerState() {Version=1; Phase="idle"; DisplaySize="large"; ShowTurnoverTimer=true; Acknowledged=new Dictionary<string,string>(); Sessions=new List<SessionRecord>();}
   [ScriptIgnore] public SessionRecord CurrentSession {get {return Sessions.Count==0 || Sessions[Sessions.Count-1].End.HasValue ? null : Sessions[Sessions.Count-1];}}
   [ScriptIgnore] public CaseRecord CurrentCase {get {var s=CurrentSession; return s==null || s.Cases.Count==0 ? null : s.Cases[s.Cases.Count-1];}}
   public bool Apply(int action,long now) {return Apply(action,now,"Test anesthetist");}
@@ -105,6 +106,7 @@ namespace SurgeryTimer {
   }
   readonly List<int> registered=new List<int>(); readonly ContextMenuStrip menu=new ContextMenuStrip();
   readonly ToolStripMenuItem smallSize=new ToolStripMenuItem("Small (120 × 80)"); readonly ToolStripMenuItem largeSize=new ToolStripMenuItem("Large (210 × 140)");
+  readonly ToolStripMenuItem showTurnover=new ToolStripMenuItem("Show turnover timer");
   readonly bool smoke; readonly BackgroundWorker syncWorker=new BackgroundWorker(); readonly ToolStripMenuItem syncStatus=new ToolStripMenuItem("Sync: waiting"); DateTime nextSync=DateTime.MinValue; bool prompting; bool syncAgain; Point dragOrigin; bool dragging; Font labelFont=new Font("Segoe UI",9f,FontStyle.Regular,GraphicsUnit.Pixel); Font timeFont=new Font("Consolas",20f,FontStyle.Bold,GraphicsUnit.Pixel);
   public TimerWindow(Store data,bool smokeTest) {
    store=data;state=store.Load();smoke=smokeTest;
@@ -114,6 +116,7 @@ namespace SurgeryTimer {
    menu.Items.Add("Start surgery   Ctrl+Shift+Alt+1",null,delegate{Act(1);});menu.Items.Add("End surgery   Ctrl+Shift+Alt+2",null,delegate{Act(2);});menu.Items.Add("End day   Ctrl+Shift+Alt+3",null,delegate{Act(3);});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Show timer",null,delegate{Show();Clamp();TopMost=true;});menu.Items.Add("Export history (CSV)...",null,delegate{Export();});menu.Items.Add("Open data folder",null,delegate{System.Diagnostics.Process.Start(Path.GetDirectoryName(store.PathName));});menu.Items.Add(new ToolStripSeparator());syncStatus.Enabled=false;menu.Items.Add(syncStatus);menu.Items.Add("Website sync details",null,delegate{MessageBox.Show(this,syncStatus.ToolTipText.Length==0?syncStatus.Text:syncStatus.ToolTipText,"Website history sync");});menu.Items.Add("Retry website sync now",null,delegate{BeginSync();});menu.Items.Add("Open website history",null,delegate{System.Diagnostics.Process.Start(SyncEngine.BaseUrl+"/history");});menu.Items.Add(new ToolStripSeparator());menu.Items.Add("Quit (keep timer running)",null,delegate{Close();});ContextMenuStrip=menu;
    smallSize.Click+=delegate{SetDisplaySize("small");};largeSize.Click+=delegate{SetDisplaySize("large");};
    var sizes=new ToolStripMenuItem("Size");sizes.DropDownItems.Add(smallSize);sizes.DropDownItems.Add(largeSize);menu.Items.Insert(menu.Items.Count-1,sizes);ApplyDisplaySize();
+   showTurnover.Checked=state.ShowTurnoverTimer;showTurnover.Click+=delegate{SetTurnoverVisibility(!state.ShowTurnoverTimer);};menu.Items.Insert(menu.Items.Count-1,showTurnover);
    tray=new NotifyIcon {Icon=trayIcon,Text="OR Timer - right-click for controls",ContextMenuStrip=menu,Visible=true};tray.DoubleClick+=delegate{Show();Clamp();};
    clock=new System.Windows.Forms.Timer {Interval=250};clock.Tick+=delegate {Invalidate();if(!smoke && DateTime.UtcNow>=nextSync)BeginSync();};clock.Start();
    MouseDown+=delegate(object sender,MouseEventArgs e){if(e.Button==MouseButtons.Left){dragging=true;dragOrigin=e.Location;Capture=true;}};
@@ -136,6 +139,11 @@ namespace SurgeryTimer {
    if(size==state.DisplaySize)return;
    try {var next=Store.Copy(state);next.DisplaySize=size;store.Save(next);state=next;ApplyDisplaySize();}
    catch(Exception error){if(smoke)throw;MessageBox.Show(this,"Unable to save the display size.\n\n"+error.Message,"OR Timer size",MessageBoxButtons.OK,MessageBoxIcon.Error);}
+  }
+  void SetTurnoverVisibility(bool visible) {
+   if(visible==state.ShowTurnoverTimer)return;
+   try {var next=Store.Copy(state);next.ShowTurnoverTimer=visible;store.Save(next);state=next;showTurnover.Checked=visible;Invalidate();}
+   catch(Exception error){if(smoke)throw;MessageBox.Show(this,"Unable to save the timer display.\n\n"+error.Message,"OR Timer display",MessageBoxButtons.OK,MessageBoxIcon.Error);}
   }
   void Clamp() {var area=Screen.FromRectangle(Bounds).WorkingArea;Location=new Point(Math.Max(area.Left,Math.Min(Left,area.Right-Width)),Math.Max(area.Top,Math.Min(Top,area.Bottom-Height)));}
   protected override bool ShowWithoutActivation {get{return true;}}
@@ -174,10 +182,10 @@ namespace SurgeryTimer {
   }
   void DrawTimer(Graphics g,string surgery,string turnover,bool surgeryActive,bool turnoverActive) {
    var drawingState=g.Save();
-   try {g.ScaleTransform(ClientSize.Width/125f,ClientSize.Height/75f);DrawRow(g,"SURGERY",surgery,surgeryActive,Color.FromArgb(115,226,151),1);DrawRow(g,"TURNOVER",turnover,turnoverActive,Color.FromArgb(255,201,105),38);DrawFrame(g);}
+   try {g.ScaleTransform(ClientSize.Width/125f,ClientSize.Height/75f);DrawRow(g,"SURGERY",surgery,surgeryActive,Color.FromArgb(115,226,151),state.ShowTurnoverTimer?1:20);if(state.ShowTurnoverTimer)DrawRow(g,"TURNOVER",turnover,turnoverActive,Color.FromArgb(255,201,105),38);DrawFrame(g,state.ShowTurnoverTimer);}
    finally {g.Restore(drawingState);}
   }
-  void DrawFrame(Graphics g) {using(var pen=new Pen(Color.FromArgb(58,60,55))) {g.DrawRectangle(pen,0,0,124,74);g.DrawLine(pen,6,37,118,37);}}
+  void DrawFrame(Graphics g,bool divider) {using(var pen=new Pen(Color.FromArgb(58,60,55))) {g.DrawRectangle(pen,0,0,124,74);if(divider)g.DrawLine(pen,6,37,118,37);}}
   void DrawRow(Graphics g,string label,string duration,bool active,Color color,int y) {
    using(var brush=new SolidBrush(active?color:Color.FromArgb(139,145,132))) {g.FillEllipse(brush,8,y+4,4,4);g.DrawString(label,labelFont,brush,16,y,StringFormat.GenericTypographic);}
    int digits=duration.Length-2, gap=1, colonWidth=5;
@@ -233,11 +241,16 @@ namespace SurgeryTimer {
     using(var resumed=new TimerWindow(store,true)){Tests.Check(resumed.ClientSize==new Size(120,80),"restart restores chosen size");}
     using(var bmp=new Bitmap(Width,Height)){using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-small-preview.png"));}
     largeSize.PerformClick();Tests.Check(ClientSize==new Size(210,140) && largeSize.Checked && !smallSize.Checked,"Large menu applies 210 x 140");
+    Tests.Check(showTurnover.Checked,"both timers shown by default");showTurnover.PerformClick();Tests.Check(!state.ShowTurnoverTimer && !showTurnover.Checked && ClientSize==new Size(210,140),"surgery-only choice keeps selected size");
+    Tests.Check(!store.Load().ShowTurnoverTimer,"surgery-only preference saved");
+    using(var resumed=new TimerWindow(store,true)){Tests.Check(!resumed.state.ShowTurnoverTimer && !resumed.showTurnover.Checked,"restart restores surgery-only display");}
+    using(var bmp=new Bitmap(Width,Height)){using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery-only.png"));}
+    showTurnover.PerformClick();Tests.Check(state.ShowTurnoverTimer && showTurnover.Checked,"both timers restored");
     Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==12,"all global shortcuts and keypad alternatives registered");
     Tests.Check(Icon!=null && tray.Icon==trayIcon && trayIcon.Width==SystemInformation.SmallIconSize.Width,"custom executable and tray icon loaded");
     using(var bmp=new Bitmap(Width,Height)) {using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-flip-preview.png"));}
     SendMessage(Handle,0x0312,new IntPtr(7),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"End-key Start alternative");
-    long runningStart=state.CurrentCase.Start;smallSize.PerformClick();largeSize.PerformClick();Tests.Check(state.Phase=="surgery" && state.CurrentCase.Start==runningStart && state.CurrentSession.Cases.Count==1,"resizing preserves running timer");
+    long runningStart=state.CurrentCase.Start;smallSize.PerformClick();largeSize.PerformClick();showTurnover.PerformClick();showTurnover.PerformClick();Tests.Check(state.Phase=="surgery" && state.CurrentCase.Start==runningStart && state.CurrentSession.Cases.Count==1,"display preferences preserve running timer");
     SendMessage(Handle,0x0312,new IntPtr(8),IntPtr.Zero);Tests.Check(state.CurrentSession.Cases.Count==1,"Numpad Start alternative does not duplicate active case");
     SendMessage(Handle,0x0312,new IntPtr(1),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.CurrentSession.Cases.Count==1,"original Start remains safe");
     using(var bmp=new Bitmap(Width,Height)){DrawToBitmap(bmp,new Rectangle(0,0,Width,Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery.png"));}
@@ -253,12 +266,14 @@ namespace SurgeryTimer {
     SendMessage(Handle,0x0312,new IntPtr(3),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[2].End.HasValue,"original End day retained");
     SendMessage(Handle,0x0312,new IntPtr(13),IntPtr.Zero);Tests.Check(state.Phase=="surgery" && state.Sessions.Count==4,"Ctrl+Alt+End starts surgery without Shift");
     SendMessage(Handle,0x0312,new IntPtr(13),IntPtr.Zero);Tests.Check(state.CurrentSession.Cases.Count==1,"repeated Start does not duplicate surgery");
-    SendMessage(Handle,0x0312,new IntPtr(14),IntPtr.Zero);Tests.Check(state.Phase=="turnover" && state.CurrentCase.End.HasValue,"Ctrl+Alt+Down stops surgery without Shift");
+    showTurnover.PerformClick();SendMessage(Handle,0x0312,new IntPtr(14),IntPtr.Zero);Tests.Check(!state.ShowTurnoverTimer && state.Phase=="turnover" && state.CurrentCase.End.HasValue && state.CurrentCase.TurnoverStarted,"hidden turnover timing continues when surgery stops");
+    Tests.Check(!store.Load().ShowTurnoverTimer && store.Load().Phase=="turnover","hidden turnover state persists with display preference");
     long stoppedAt=state.CurrentCase.End.Value;SendMessage(Handle,0x0312,new IntPtr(14),IntPtr.Zero);Tests.Check(state.CurrentCase.End.Value==stoppedAt,"repeated Stop preserves recorded end time");
     SendMessage(Handle,0x0312,new IntPtr(15),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[3].End.HasValue,"Ctrl+Alt+Page Down ends day from turnover");
     long dayEndedAt=state.Sessions[3].End.Value;SendMessage(Handle,0x0312,new IntPtr(15),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions.Count==4 && state.Sessions[3].End.Value==dayEndedAt,"repeated End day is harmless");
     SendMessage(Handle,0x0312,new IntPtr(13),IntPtr.Zero);SendMessage(Handle,0x0312,new IntPtr(15),IntPtr.Zero);Tests.Check(state.Phase=="idle" && state.Sessions[4].Cases[0].End.HasValue,"Ctrl+Alt+Page Down finalizes running surgery");
-    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: size presets and persistence, twelve global registrations, Ctrl+Alt+End Start / Down Stop / PageDown End day, both End day phases, duplicate guards, modal-picker navigation and original shortcuts.");
+    Tests.Check(!state.ShowTurnoverTimer,"End day preserves surgery-only preference");showTurnover.PerformClick();
+    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"PASS: surgery-only toggle and restart preference, hidden turnover still recorded, size presets, active timing preserved, twelve global registrations, picker routing and all timer transitions.");
    }catch(Exception e){Environment.ExitCode=1;File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-test-result.txt"),"FAIL: "+e);}
    finally{Close();}
   }
@@ -267,6 +282,7 @@ namespace SurgeryTimer {
  public static class Tests {
   public static void Check(bool ok,string name){if(!ok)throw new Exception("Failed: "+name);}
   public static void Run(string dir) {
+   var legacy=new Store(Path.Combine(dir,"legacy"));File.WriteAllText(legacy.PathName,"{\"Version\":1,\"Phase\":\"idle\",\"DisplaySize\":\"small\",\"Acknowledged\":{},\"Sessions\":[]}");Tests.Check(legacy.Load().ShowTurnoverTimer && legacy.Load().DisplaySize=="small","older state preserves size and defaults to both timers");
    long t=new DateTime(2026,10,17,12,0,0,DateTimeKind.Utc).Ticks;long sec=TimeSpan.TicksPerSecond;var s=new TimerState();
    var precise=new TimerState();precise.Apply(1,t+9000);precise.Apply(2,t+sec+1000);Check(precise.CurrentCase.Start==t && precise.CurrentCase.End==t+sec && precise.SurgerySeconds(t+2*sec)==1,"sub-millisecond timestamps match JavaScript duration precision");
    Check(!s.Apply(2,t)&&!s.Apply(3,t),"idle actions are harmless");Check(s.Apply(1,t),"start");Check(!s.Apply(1,t+sec),"duplicate start");Check(s.SurgerySeconds(t+61*sec)==61,"elapsed");
