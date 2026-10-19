@@ -21,6 +21,7 @@ Choose **Size → Small (120 × 80)** or **Size → Large (210 × 140)** in the 
 | End surgery / start turnover | Ctrl+Shift+Alt+2 |
 | Stop alternative / next name while picker is open | Ctrl+Shift+Alt+Down |
 | Stop alternative (numpad 2 with Num Lock on) | Ctrl+Shift+Alt+NumPad2 |
+| Stop alternative when the keypad releases Shift before Down | Ctrl+Alt+Down |
 | End day / finalize active phase | Ctrl+Shift+Alt+3 |
 | End day alternative (numpad 3 with Num Lock off) | Ctrl+Shift+Alt+PageDown |
 | End day alternative (numpad 3 with Num Lock on) | Ctrl+Shift+Alt+NumPad3 |
