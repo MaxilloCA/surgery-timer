@@ -1,0 +1,40 @@
+OR TIMER FOR WINDOWS
+
+Open OR Timer from the Start Menu. It displays a small timer above other windows
+and a stopwatch icon beside the Windows clock (possibly under the up arrow).
+Right-click the timer or tray icon for controls, history, size, and Quit.
+
+KEYBOARD SHORTCUTS (work while another desktop app is active)
+Ctrl + Alt + End: Start surgery
+Ctrl + Alt + Down: Stop surgery and start turnover
+Ctrl + Alt + Page Down: End the day
+
+When choosing an anesthesiologist:
+Ctrl + Shift + Alt + Up / Down: Previous / next name
+Ctrl + Shift + Alt + Enter: Confirm selection and start surgery
+
+Original Ctrl + Shift + Alt + 1 / 2 / 3 shortcuts also work.
+
+SIZE
+Right-click > Size > Small (120 x 80) or Large (210 x 140).
+
+SHARED HISTORY
+The app saves locally and uploads history to https://surgery-timer.vercel.app.
+Use Open website history to edit times or delete a case or session.
+Offline records retry automatically when the connection returns.
+
+STARTING WITH WINDOWS
+Setup enables Start with Windows by default for the current user. Run Setup
+again to change that choice. Only one copy of the timer should run at once.
+
+UPDATING OR REMOVING
+Quit the timer before running Setup again or uninstalling it through Windows
+Settings > Apps. Uninstall preserves local timer records at:
+%LOCALAPPDATA%\OR Timer
+
+Quit preserves any running timer; elapsed time continues after reopening.
+Use End day first if timing should stop. Verify shortcuts on the target PC,
+since other apps may register the same combinations.
+
+Requires Windows 10 or newer and .NET Framework 4.5 or newer.
+This app and installer are unsigned.
