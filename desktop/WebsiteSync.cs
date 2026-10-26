@@ -52,23 +52,24 @@ namespace SurgeryTimer {
   public static void VerifyPicker() {
    using(var dialog=new NameDialog()) {
     Tests.Check(dialog.field.DropDownStyle==ComboBoxStyle.DropDownList,"picker rejects typed names");
-    Tests.Check(dialog.field.Items.Count==16 && dialog.field.SelectedIndex==-1 && dialog.AnesthetistName==String.Empty && !dialog.start.Enabled,"picker requires explicit selection");
+    Tests.Check(dialog.field.Items.Count==18 && dialog.field.SelectedIndex==-1 && dialog.AnesthetistName==String.Empty && !dialog.start.Enabled,"picker requires explicit selection");
     string previous=null;
     for(int i=0;i<dialog.field.Items.Count;i++) {
      string name=(string)dialog.field.Items[i];
-     Tests.Check(name.StartsWith(i<2?".surgi - Dr. ":"rvh - Dr. "),"picker group order");
-     if(previous!=null && i!=2)Tests.Check(String.CompareOrdinal(previous,name)<0,"picker alphabetical order");
+     Tests.Check(name.StartsWith(i<2?".surgi - Dr. ":i<4?"Dr. ":"rvh - Dr. "),"picker group order");
+     if(previous!=null && i!=2 && i!=4)Tests.Check(String.CompareOrdinal(previous,name)<0,"picker alphabetical order");
      previous=name;
     }
+    Tests.Check((string)dialog.field.Items[2]=="Dr. Quach" && (string)dialog.field.Items[3]=="Dr. Teague","new names preserve exact text and roster order");
     dialog.field.SelectedIndex=0;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName==".surgi - Dr. Chan","first selection value");
-    dialog.field.SelectedIndex=15;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName=="rvh - Dr. Zoratto","last selection value");
+    dialog.field.SelectedIndex=17;Tests.Check(dialog.start.Enabled && dialog.AnesthetistName=="rvh - Dr. Zoratto","last selection value");
     dialog.field.SelectedIndex=-1;Tests.Check(!dialog.start.Enabled && dialog.AnesthetistName==String.Empty,"cleared selection cannot start");
     dialog.PickerAction(6);Tests.Check(dialog.DialogResult!=DialogResult.OK,"global Enter requires explicit selection");
     dialog.PickerAction(5);Tests.Check(dialog.field.SelectedIndex==0,"global Down from no selection chooses first");
     dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==0,"global Up clamps first");
-    dialog.field.SelectedIndex=-1;dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==15,"global Up from no selection chooses last");
-    dialog.PickerAction(5);Tests.Check(dialog.field.SelectedIndex==15,"global Down clamps last");
-    dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==14,"global Up moves previous");
+    dialog.field.SelectedIndex=-1;dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==17,"global Up from no selection chooses last");
+    dialog.PickerAction(5);Tests.Check(dialog.field.SelectedIndex==17,"global Down clamps last");
+    dialog.PickerAction(4);Tests.Check(dialog.field.SelectedIndex==16,"global Up moves previous");
    }
   }
   public static bool VerifyGlobalPicker() {

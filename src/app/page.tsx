@@ -250,7 +250,7 @@ export default function TimerPage() {
 
   return (
     <div className="flex flex-col min-h-screen px-4 pt-10 pb-4 max-w-lg mx-auto">
-      {showModal && <NewDayModal onConfirm={handleModalConfirm} />}
+      {showModal && <NewDayModal onConfirm={handleModalConfirm} onCancel={() => setShowModal(false)} />}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-8">

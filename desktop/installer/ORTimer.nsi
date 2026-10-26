@@ -9,7 +9,7 @@ Unicode true
 !ifndef OUTPUT_DIR
   !error "OUTPUT_DIR must be supplied by build.ps1"
 !endif
-!define APP_VERSION "1.0.1"
+!define APP_VERSION "1.0.2"
 !ifdef TEST_ROOT
   !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\ORTimer-InstallerTest"
   !define APP_MUTEX "Local\OR-Timer-Desktop-v1-InstallerTest"
@@ -28,7 +28,7 @@ SetCompressor /SOLID lzma
 SetOverwrite on
 Icon "..\assets\ORTimer.ico"
 UninstallIcon "..\assets\ORTimer.ico"
-VIProductVersion "1.0.1.0"
+VIProductVersion "1.0.2.0"
 VIAddVersionKey /LANG=1033 "ProductName" "OR Timer"
 VIAddVersionKey /LANG=1033 "FileDescription" "OR Timer Setup"
 VIAddVersionKey /LANG=1033 "FileVersion" "${APP_VERSION}"

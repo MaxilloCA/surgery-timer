@@ -91,7 +91,7 @@ namespace SurgeryTimer {
   }
  }
  public sealed class TimerWindow : Form {
-  static Size DisplayDimensions(string size) {return size=="small"?new Size(120,80):new Size(210,140);}
+  static Size DisplayDimensions(string size) {return size=="small"?new Size(120,80):new Size(420,280);}
   [DllImport("user32.dll",SetLastError=true)]static extern bool RegisterHotKey(IntPtr hwnd,int id,uint modifiers,uint key);
   [DllImport("user32.dll")]static extern bool UnregisterHotKey(IntPtr hwnd,int id);
   [DllImport("user32.dll")]static extern IntPtr SendMessage(IntPtr hwnd,int msg,IntPtr w,IntPtr l);
@@ -105,7 +105,7 @@ namespace SurgeryTimer {
    }
   }
   readonly List<int> registered=new List<int>(); readonly ContextMenuStrip menu=new ContextMenuStrip();
-  readonly ToolStripMenuItem smallSize=new ToolStripMenuItem("Small (120 × 80)"); readonly ToolStripMenuItem largeSize=new ToolStripMenuItem("Large (210 × 140)");
+  readonly ToolStripMenuItem smallSize=new ToolStripMenuItem("Small (120 × 80)"); readonly ToolStripMenuItem largeSize=new ToolStripMenuItem("Large (420 × 280)");
   readonly ToolStripMenuItem showTurnover=new ToolStripMenuItem("Show turnover timer");
   readonly bool smoke; readonly BackgroundWorker syncWorker=new BackgroundWorker(); readonly ToolStripMenuItem syncStatus=new ToolStripMenuItem("Sync: waiting"); DateTime nextSync=DateTime.MinValue; bool prompting; bool syncAgain; Point dragOrigin; bool dragging; Font labelFont=new Font("Segoe UI",9f,FontStyle.Regular,GraphicsUnit.Pixel); Font timeFont=new Font("Consolas",20f,FontStyle.Bold,GraphicsUnit.Pixel);
   public TimerWindow(Store data,bool smokeTest) {
@@ -226,7 +226,7 @@ namespace SurgeryTimer {
         SendMessage(Handle,0x0312,new IntPtr(10),IntPtr.Zero);
         Tests.Check(picker.AnesthetistName==".surgi - Dr. Taylor","numpad 2 navigates modal picker");
         SendMessage(Handle,0x0312,new IntPtr(14),IntPtr.Zero);
-        Tests.Check(picker.AnesthetistName=="rvh - Dr. Barakat" && state.Phase=="idle","Ctrl+Alt+Down navigates open modal picker");
+        Tests.Check(picker.AnesthetistName=="Dr. Quach" && state.Phase=="idle","Ctrl+Alt+Down navigates open modal picker");
         using(var bmp=new Bitmap(picker.Width,picker.Height)){picker.DrawToBitmap(bmp,new Rectangle(0,0,picker.Width,picker.Height));bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-picker.png"));}
         SendMessage(picker.Handle,0x0312,new IntPtr(6),IntPtr.Zero);
        }catch(Exception error){pickerFailure=error;picker.Close();}
@@ -240,11 +240,14 @@ namespace SurgeryTimer {
     Tests.Check(store.Load().DisplaySize=="small","size preference persisted");
     using(var resumed=new TimerWindow(store,true)){Tests.Check(resumed.ClientSize==new Size(120,80),"restart restores chosen size");}
     using(var bmp=new Bitmap(Width,Height)){using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-small-preview.png"));}
-    largeSize.PerformClick();Tests.Check(ClientSize==new Size(210,140) && largeSize.Checked && !smallSize.Checked,"Large menu applies 210 x 140");
-    Tests.Check(showTurnover.Checked,"both timers shown by default");showTurnover.PerformClick();Tests.Check(!state.ShowTurnoverTimer && !showTurnover.Checked && ClientSize==new Size(210,140),"surgery-only choice keeps selected size");
+    largeSize.PerformClick();Tests.Check(ClientSize==new Size(420,280) && largeSize.Checked && !smallSize.Checked,"Large menu applies 420 x 280");
+    Tests.Check(showTurnover.Checked,"both timers shown by default");showTurnover.PerformClick();Tests.Check(!state.ShowTurnoverTimer && !showTurnover.Checked && ClientSize==new Size(420,280),"surgery-only choice keeps selected size");
     Tests.Check(!store.Load().ShowTurnoverTimer,"surgery-only preference saved");
     using(var resumed=new TimerWindow(store,true)){Tests.Check(!resumed.state.ShowTurnoverTimer && !resumed.showTurnover.Checked,"restart restores surgery-only display");}
     using(var bmp=new Bitmap(Width,Height)){using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-surgery-only.png"));}
+    smallSize.PerformClick();Tests.Check(ClientSize==new Size(120,80) && !state.ShowTurnoverTimer,"Small surgery-only keeps visibility preference");
+    using(var bmp=new Bitmap(Width,Height)){using(var g=Graphics.FromImage(bmp)){g.Clear(BackColor);DrawTimer(g,"12:34:56","00:08:23",true,false);}bmp.Save(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"smoke-small-surgery-only.png"));}
+    largeSize.PerformClick();Tests.Check(ClientSize==new Size(420,280) && !state.ShowTurnoverTimer,"Large surgery-only keeps visibility preference");
     showTurnover.PerformClick();Tests.Check(state.ShowTurnoverTimer && showTurnover.Checked,"both timers restored");
     Tests.Check(TopMost && !ShowInTaskbar && FormBorderStyle==FormBorderStyle.None,"window flags");Tests.Check(registered.Count==12,"all global shortcuts and keypad alternatives registered");
     Tests.Check(Icon!=null && tray.Icon==trayIcon && trayIcon.Width==SystemInformation.SmallIconSize.Width,"custom executable and tray icon loaded");
